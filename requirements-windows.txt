@@ -1,0 +1,1 @@
+-r skills/kakaotalk-mac/scripts/windows/requirements.txt
