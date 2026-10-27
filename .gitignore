@@ -24,3 +24,9 @@ credentials*
 *.key
 *.pem
 .DS_Store
+# Local UI-search captures and receipt exports must never become fixtures.
+*.bmp
+*-receipt.json
+*-request.json
+*-output.json
+*-search.png

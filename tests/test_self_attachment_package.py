@@ -22,18 +22,18 @@ class PortableAttachmentTests(unittest.TestCase):
     def test_sources_parse_without_executing_windows_modules(self):
         files=list(PACKAGE.glob('*.py'))
         self.assertEqual(len(files),10)
-        for path in files:ast.parse(path.read_text(),filename=path.name)
+        for path in files:ast.parse(path.read_text(encoding='utf8'),filename=path.name)
 
     def test_no_personal_machine_paths(self):
         for path in PACKAGE.glob('*.py'):
-            text=path.read_text()
+            text=path.read_text(encoding='utf8')
             self.assertNotIn('C:\\Users\\',text)
             self.assertNotIn('/Users/',text)
             self.assertNotIn('Python314',text)
 
     def test_source_and_state_separated(self):
         self.assertEqual(qa.READER_ROOT,PACKAGE.parents[1]/'skills/kakaotalk-mac/scripts/windows')
-        job=(PACKAGE/'attachment_no_ui_job_win.py').read_text()
+        job=(PACKAGE/'attachment_no_ui_job_win.py').read_text(encoding='utf8')
         self.assertIn('(SOURCE_ROOT/filename).read_bytes()',job)
         self.assertIn("str(SOURCE_ROOT/'no_ui_observer_win.py')",job)
         self.assertIn("str(SOURCE_ROOT/'attachment_receipt_win.py')",job)
@@ -41,13 +41,13 @@ class PortableAttachmentTests(unittest.TestCase):
         self.assertNotIn("str(ROOT/'",job)
 
     def test_plan_return_precedes_drop_code(self):
-        tree=ast.parse((PACKAGE/'attachment_send_win.py').read_text())
+        tree=ast.parse((PACKAGE/'attachment_send_win.py').read_text(encoding='utf8'))
         fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run')
         gate=next(n for n in fn.body if isinstance(n,ast.If) and ast.unparse(n.test)=="not request['execute']")
         self.assertIsInstance(gate.body[0],ast.Return)
         drop=next(n for n in ast.walk(fn) if isinstance(n,ast.Attribute) and n.attr=='PostMessageW')
         self.assertLess(gate.lineno,drop.lineno)
-        job=(PACKAGE/'attachment_no_ui_job_win.py').read_text()
+        job=(PACKAGE/'attachment_no_ui_job_win.py').read_text(encoding='utf8')
         self.assertIn("send(dict(request,execute=False))",job)
 
     def test_fixed_fixture_bytes_and_types(self):
@@ -98,7 +98,7 @@ class PortableAttachmentTests(unittest.TestCase):
                 self.assertIs(request['owner_authorized_self_qa'],False)
 
     def test_direct_sender_validates_explicit_approval(self):
-        tree=ast.parse((PACKAGE/'attachment_send_win.py').read_text())
+        tree=ast.parse((PACKAGE/'attachment_send_win.py').read_text(encoding='utf8'))
         fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='validate_request')
         namespace={'re':re}
         exec(compile(ast.Module(body=[fn],type_ignores=[]),'sender-request-check','exec'),namespace)
@@ -178,7 +178,7 @@ class PortableAttachmentTests(unittest.TestCase):
         self.assertNotIn('private-sensitive-path',output.getvalue())
 
     def test_private_state_junction_attribute_is_rejected(self):
-        tree=ast.parse((PACKAGE/'selfqa_config.py').read_text())
+        tree=ast.parse((PACKAGE/'selfqa_config.py').read_text(encoding='utf8'))
         fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='require_windows')
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

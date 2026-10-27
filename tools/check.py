@@ -10,9 +10,10 @@ if sys.version_info < (3,11):
 root=Path(__file__).resolve().parents[1]
 runtime=root/'skills/kakaotalk-mac/scripts/windows'
 sys.path.insert(0,str(runtime))
-files=sorted(runtime.glob('*.py'))
+files=sorted(p for folder in ('skills','experimental','tools','tests')
+             for p in (root/folder).rglob('*.py') if '__pycache__' not in p.parts)
 for path in files:
-    ast.parse(path.read_text(encoding='utf8'),filename=path.name)
+    ast.parse(path.read_text(encoding='utf8'),filename=str(path.relative_to(root)))
 suite=unittest.defaultTestLoader.discover(str(root/'tests'))
 result=unittest.TextTestRunner(verbosity=2).run(suite)
 print(f'Source parsed: {len(files)} modules; app data read: 0')

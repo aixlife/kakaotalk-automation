@@ -1,6 +1,6 @@
 # 프로젝트에 읽기 스킬 설치하기
 
-기본 설치 대상은 `skills/kakaotalk-mac` 읽기 스킬입니다. Codex와 Claude Code에서 같은 스킬 이름을 사용합니다. `experimental/`의 첨부·방 사전검사 도구는 복사하지 않으며, 읽기 스킬 설치만으로 발신 기능이 추가되지 않습니다.
+기본 설치 대상은 `skills/kakaotalk-mac` 읽기 스킬입니다. Codex와 Claude Code에서 같은 스킬 이름을 사용합니다. `experimental/`의 첨부·방 사전검사·방 열기 도구는 복사하지 않으며, 읽기 스킬 설치만으로 화면 조작이나 발신 기능이 추가되지 않습니다.
 
 ## 내려받기와 설치 계획 확인
 
@@ -54,4 +54,8 @@ macOS에서는 이미 설치한 `katok`이 필요합니다. 이 저장소에 Mac
 
 [자기방 첨부 실험](../experimental/self-attachments/README.md)은 고정 TXT70B·PNG5,931B만 처리합니다. `python experimental/self-attachments/self_qa.py plan`은 발신 없는 준비 검사이며, 실제 발신은 별도 명시 승인 명령입니다. 기존 실험 소스에서는 실제 송수신을 확인했지만 배포용 이식본의 실제 송수신은 아직 NOT_RUN입니다.
 
-[방 사전검사 실험](../experimental/room-preflight/README.md)은 `python experimental/room-preflight/preflight.py --name "정확한 방 이름"`으로 정확한 방과 기존 창 후보를 진단합니다. 창 열기·입력·발신 코드가 없고 `send_ready`는 항상 false입니다. 두 도구 모두 기본 설치에서 제외됩니다. 임의 파일·다른 방 발신, 닫힌 방 자동 열기, 로그인된 데스크톱 없이 동작하는 발신을 보장하지 않습니다. [첨부 QA 기록](attachments-QA.md)은 실물 성공, 차단 이력, 미검증 범위를 별도로 설명합니다.
+[방 사전검사 실험](../experimental/room-preflight/README.md)은 `python experimental/room-preflight/preflight.py --name "정확한 방 이름"`으로 정확한 방과 기존 창 후보를 진단합니다. 창 열기·입력·발신 코드가 없고 `send_ready`는 항상 false입니다.
+
+[방 열기 실험](../experimental/room-open/README.md)은 내려받은 저장소에서 별도로 실행합니다. 위 Windows 의존성 준비 후 `python experimental/room-open/room_open.py inspect`로 상태를 확인하고, `search --name "정확한 방 이름" --allow-ui`로 검색합니다. 로컬 검색 캡처에서 행을 확인한 다음 저장된 영수증·좌표·명시적 화면 조작 옵션을 `open`에 전달합니다. `check --name "정확한 방 이름"`은 열린 창을 배경에서 점검합니다. 검색·열기는 잠시 화면을 바꾸므로 기본 읽기 동작과 구분합니다.
+
+세 실험 도구 모두 기본 설치에서 제외됩니다. CLI가 저장소 안의 읽기 모듈을 사용하므로 `experimental/room-open` 폴더만 따로 복사하지 않습니다. 임의 파일·다른 방 발신이나 로그인된 데스크톱 없이 동작하는 발신은 제공하지 않습니다. [방 열기 QA](room-opening-QA.md)와 [첨부 QA](attachments-QA.md)에 실물 성공·차단 이력·미검증 범위를 구분했습니다.
