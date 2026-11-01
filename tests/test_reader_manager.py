@@ -8,6 +8,7 @@ import importlib.util
 import os
 from pathlib import Path, PureWindowsPath
 import stat
+import struct
 import py_compile
 import subprocess
 import sys
@@ -121,6 +122,61 @@ class ManagerTests(unittest.TestCase):
         transport = FakeTransport(*fixture)
         result = self.subject.check(APP,transport=transport,now=100,**kwargs)
         return result,transport
+
+    def installation_fixtures(self):
+        paths = []
+        for name,machine,magic in (('first',0x8664,0x20b),('second',0x14c,0x10b)):
+            path = self.project/(name+'.exe')
+            body = bytearray(256)
+            body[:2] = b'MZ'
+            struct.pack_into('<I',body,0x3c,64)
+            body[64:68] = b'PE\0\0'
+            struct.pack_into('<H',body,68,machine)
+            struct.pack_into('<H',body,88,magic)
+            path.write_bytes(body)
+            paths.append(path)
+        return paths
+
+    def test_coexisting_installations_require_explicit_pe_architecture(self):
+        paths = self.installation_fixtures()
+        with self.assertRaisesRegex(manager.UpdateError,'APP_NOT_FOUND_OR_NOT_UNIQUE'):
+            manager.select_app_metadata(paths)
+        for architecture,path in zip(('x64','x86'),paths):
+            with self.subTest(architecture=architecture):
+                selected = manager.select_app_metadata(list(reversed(paths)),architecture)
+                self.assertEqual(selected,{'architecture':architecture,
+                    'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
+        self.assertEqual(manager.select_app_metadata(paths[:1]),manager.app_file_metadata(paths[0]))
+
+    def test_app_selection_errors_and_x86_selection_do_not_bypass_qa(self):
+        paths = self.installation_fixtures()
+        for candidates,architecture in (([],'x64'),(paths[1:],'x64'),(paths,'arm64'),
+                                        ([paths[0],paths[0]],'x64')):
+            with self.subTest(architecture=architecture),self.assertRaises(manager.UpdateError):
+                manager.select_app_metadata(candidates,architecture)
+        approved = manager.select_app_metadata(paths,'x64')
+        unapproved = manager.select_app_metadata(paths,'x86')
+        fake = FakeTransport(*release(app=approved))
+        with self.assertRaisesRegex(manager.UpdateError,'NO_VERIFIED_UPDATE'):
+            self.subject.check(unapproved,transport=fake,now=100)
+        self.assertIsNone(self.subject.active())
+
+    def test_app_selection_is_check_read_only_and_does_not_change_config(self):
+        before = (self.subject.state/'config.json').read_bytes()
+        for command in ('enable','disable','status'):
+            with self.subTest(command=command),contextlib.redirect_stdout(io.StringIO()) as output:
+                result = manager.main([command,'--project',str(self.project),'--agent','codex',
+                                       '--app-architecture','x64'])
+                self.assertEqual(result,2)
+                self.assertEqual(json.loads(output.getvalue())['reason'],'APP_SELECTION_REQUIRES_READ_OR_CHECK')
+        with patch.object(manager,'app_metadata',return_value=APP) as metadata, \
+                patch.object(manager.Manager,'check',return_value={'status':'CURRENT'}) as check, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(manager.main(['check','--project',str(self.project),'--agent','codex',
+                                           '--app-architecture','x64']),0)
+            metadata.assert_called_once_with('x64')
+            check.assert_called_once_with(APP,force=False)
+        self.assertEqual((self.subject.state/'config.json').read_bytes(),before)
 
     def test_opt_in_and_agent_isolation_no_schedule_or_skill_write(self):
         self.assertTrue(self.subject.config()['enabled'])
@@ -411,6 +467,83 @@ raise SystemExit(result)
         self.assertEqual(result,0)
         self.assertEqual(json.loads(output.getvalue())['status'],'ENABLED')
         self.assertEqual(error.getvalue(),'')
+
+    def test_read_parent_waits_for_delayed_descendant_and_propagates_exit(self):
+        child_script = self.project/'synthetic-delayed-reader.py'
+        child_script.write_text('''import json,os,sys,time
+from pathlib import Path
+ready,release,done=map(Path,sys.argv[1:4])
+pending=ready.with_name(ready.name+'.pending')
+pending.write_text(str(os.getpid()),encoding='utf8')
+pending.replace(ready)
+deadline=time.monotonic()+10
+while not release.exists():
+    if time.monotonic()>deadline: raise SystemExit(97)
+    time.sleep(.01)
+time.sleep(.1)
+print(json.dumps({'status':'합성 읽기 완료'},ensure_ascii=False),flush=True)
+done.write_text('finished',encoding='utf8')
+raise SystemExit(int(sys.argv[4]))
+''',encoding='utf8')
+        parent_code = '''import json,os,sys
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+import reader_manager as manager
+started=Path(sys.argv[9])
+pending=started.with_name(started.name+'.pending')
+pending.write_text(json.dumps({'pid':os.getpid()}),encoding='utf8')
+pending.replace(started)
+class FakeManager:
+    def __init__(self,*args): pass
+    def check(self,app,**kwargs):
+        assert app=={'architecture':'x64'}
+        return {'status':'CURRENT'}
+    def reader_command(self,*args):
+        return [sys.executable,'-I','-B','-X','utf8',*sys.argv[3:8]]
+manager.Manager=FakeManager
+manager.app_metadata=lambda architecture=None: {'architecture':architecture}
+code=manager.main(['read','--project',sys.argv[2],'--agent','codex','--app-architecture','x64','--','accounts'])
+Path(sys.argv[8]).write_text(json.dumps({'pid':os.getpid(),'child_exit':code}),encoding='utf8')
+raise SystemExit(code)
+'''
+        for expected_exit in (0,23):
+            with self.subTest(exit_code=expected_exit):
+                ready = self.project/('ready-'+str(expected_exit))
+                release = self.project/('release-'+str(expected_exit))
+                done = self.project/('done-'+str(expected_exit))
+                parent_done = self.project/('parent-done-'+str(expected_exit))
+                parent_started = self.project/('parent-started-'+str(expected_exit))
+                parent = subprocess.Popen([sys.executable,'-B','-c',parent_code,str(ROOT/'tools'),
+                    str(self.project),str(child_script),str(ready),str(release),str(done),
+                    str(expected_exit),str(parent_done),str(parent_started)],stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                    env=dict(os.environ,PYTHONIOENCODING='cp1252'))
+                try:
+                    deadline = time.monotonic()+5
+                    while not ready.exists() and time.monotonic()<deadline:
+                        time.sleep(.01)
+                    self.assertTrue(ready.exists(),'synthetic child did not start')
+                    self.assertIsNone(parent.poll(),'manager exited while its child was still waiting')
+                    self.assertTrue(parent_started.exists(),'actual Python parent did not record its start')
+                    actual_parent_pid = json.loads(parent_started.read_text(encoding='utf8'))['pid']
+                    self.assertIsInstance(actual_parent_pid,int)
+                    self.assertGreater(actual_parent_pid,0)
+                    self.assertNotEqual(int(ready.read_text(encoding='utf8')),actual_parent_pid)
+                    self.assertFalse(done.exists())
+                    self.assertFalse(parent_done.exists())
+                finally:
+                    release.write_text('continue',encoding='utf8')
+                    try:
+                        stdout,stderr = parent.communicate(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        parent.kill()
+                        stdout,stderr = parent.communicate(timeout=5)
+                        self.fail('synthetic manager/child did not finish within the test bound')
+                self.assertEqual(parent.returncode,expected_exit,stderr)
+                self.assertEqual(json.loads(stdout.decode('utf8')),{'status':'합성 읽기 완료'})
+                self.assertEqual(done.read_text(encoding='utf8'),'finished')
+                self.assertEqual(json.loads(parent_done.read_text(encoding='utf8')),
+                                 {'pid':actual_parent_pid,'child_exit':expected_exit})
 
     def test_real_process_crash_before_and_after_atomic_pointer_recovers(self):
         self.install()

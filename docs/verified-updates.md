@@ -23,6 +23,8 @@ $manager = Join-Path 'PROJECT_PATH' '.kakaotalk-reader\reader_manager.py'
 
 관리 옵션과 실제 읽기 명령 사이에 `--`를 넣습니다. `rooms`, `messages`, `search`, `self`, `doctor`, `accounts`, `schema`, `resume`과 허용된 읽기 옵션을 전달할 수 있습니다. 계정이 여러 개면 `--account-token`도 실제 읽기 명령 뒤에 붙입니다. 후보 시험 옵션, 발신, 화면·첨부 실험, 임의 명령은 허용하지 않습니다.
 
+32비트·64비트 설치 파일이 함께 있으면 기본 동작은 `APP_NOT_FOUND_OR_NOT_UNIQUE`로 중단합니다. 사용할 앱이64비트임을 확인했다면 `check/read`의 관리 옵션에 `--app-architecture x64`를 명시합니다. 예: `& $python $manager read --agent codex --app-architecture x64 -- messages --name "정확한 방 이름" --limit 3`. 32비트 선택값은 `x86`입니다. 선택값은 파일의 PE 아키텍처를 구분할 뿐이며, 정확한 앱 해시·실물 QA·정식 승인 검사를 생략하지 않습니다. x86 후보에는 이 관리 실행기 대신 [소유자 검증 도구](windows-x86-probe.md)를 사용합니다.
+
 정식 릴리스를 성공적으로 확인하면 최대1시간 그 결과를 재사용합니다. 앱의 해시·아키텍처가 바뀌면 즉시 새 검증본을 확인합니다. 확인 실패는 이전 성공 캐시를 무효화합니다. 직접 `kakao_read_win.py`를 실행하면 이 자동 확인은 없습니다.
 
 명시적으로 지금 확인하거나 끄려면 다음 명령을 사용합니다.
@@ -62,6 +64,7 @@ $manager = Join-Path 'PROJECT_PATH' '.kakaotalk-reader\reader_manager.py'
 | 결과 | 처리 |
 |---|---|
 | `NO_VERIFIED_UPDATE` / `VERIFIED_MANIFEST_MISSING` | 현재 앱에 맞는 정식 검증본이 없습니다. 기존 파일을 보존하고 읽기를 중단합니다. |
+| `APP_NOT_FOUND_OR_NOT_UNIQUE` | 설치 파일이 없거나 여러 개입니다. 두 아키텍처가 공존하면 실제 사용할 앱을 확인하고 `check/read`에 `--app-architecture x64` 또는 `x86`을 명시합니다. 파일 삭제·해시 허용 목록 수정으로 통과시키지 않습니다. |
 | `CURRENT_OFFLINE` | 네트워크는 실패했지만 현재 앱과 정확히 일치하는 온전한 기존 payload로 읽습니다. 새 업데이트 적용은 아닙니다. |
 | `UPDATE_NETWORK_UNAVAILABLE` / `UPDATE_NETWORK_TIMEOUT` | 사용 가능한 기존 payload가 없으면 읽기를 시작하지 않습니다. |
 | `LOCAL_PAYLOAD_MODIFIED` / `RECOVERY_CONFLICT` | 개인 변경·외부 변경을 덮어쓰지 않습니다. 현재 파일과 이전 버전을 보존하고 차이를 확인합니다. |

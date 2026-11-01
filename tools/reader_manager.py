@@ -336,7 +336,7 @@ def fetch_release(transport, deadline):
     return manifest
 
 
-def app_metadata():
+def app_metadata(architecture=None):
     """Read installation files only; no process, account, window or DB query."""
     require(os.name == 'nt' and struct.calcsize('P') == 8 and sys.version_info >= (3, 11),
             'WINDOWS_X64_PYTHON_REQUIRED')
@@ -344,8 +344,20 @@ def app_metadata():
         Path(os.environ.get('ProgramFiles', r'C:\Program Files'))/'Kakao/KakaoTalk/KakaoTalk.exe',
         Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)'))/'Kakao/KakaoTalk/KakaoTalk.exe'}
     paths = [safe_path(path) for path in paths if path.is_file()]
-    require(len(paths) == 1, 'APP_NOT_FOUND_OR_NOT_UNIQUE')
-    path = paths[0]
+    return select_app_metadata(paths,architecture)
+
+
+def select_app_metadata(paths,architecture=None):
+    require(architecture in (None,'x64','x86'), 'APP_ARCHITECTURE_SELECTION_INVALID')
+    require(paths and (architecture is not None or len(paths) == 1), 'APP_NOT_FOUND_OR_NOT_UNIQUE')
+    matches = [value for value in (app_file_metadata(path) for path in paths)
+               if architecture is None or value['architecture'] == architecture]
+    require(len(matches) == 1, 'APP_NOT_FOUND_OR_NOT_UNIQUE')
+    return matches[0]
+
+
+def app_file_metadata(path):
+    path = safe_path(path)
     require(64 <= path.stat().st_size <= 256*1024*1024, 'APP_FILE_SIZE_LIMIT')
     with path.open('rb') as stream:
         header = stream.read(64)
@@ -786,6 +798,8 @@ def main(argv=None):
     parser.add_argument('--project')
     parser.add_argument('--agent', required=True, choices=('codex','claude'))
     parser.add_argument('--force', action='store_true')
+    parser.add_argument('--app-architecture',choices=('x64','x86'),
+                        help='check/read only: select an installed executable by its PE architecture')
     args = parser.parse_args(argv[:separator])
     try:
         # Installed bootstrap resolves its project; no manifest can supply it.
@@ -793,6 +807,8 @@ def main(argv=None):
                                    if Path(__file__).parent.name == ROOT_NAME else None)
         require(project is not None, 'PROJECT_REQUIRED')
         require(args.command == 'read' or not arguments, 'UNEXPECTED_ARGUMENTS')
+        require(args.app_architecture is None or args.command in ('check','read'),
+                'APP_SELECTION_REQUIRES_READ_OR_CHECK')
         if args.command == 'enable':
             result = enable(project, args.agent)
         elif args.command == 'disable':
@@ -805,14 +821,18 @@ def main(argv=None):
             manager = Manager(project, args.agent)
             if args.command == 'read':
                 reader_arguments(arguments)
-            app = app_metadata()
+            app = app_metadata(args.app_architecture) if args.app_architecture else app_metadata()
             result = manager.check(app, force=args.force)
             if args.command == 'read':
                 command = manager.reader_command(app,arguments)
                 # The selected immutable tree survives future pointer changes.
                 print(json.dumps({'update':result},ensure_ascii=False),file=sys.stderr,flush=True)
                 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
-                os.execv(sys.executable, command)
+                # Windows execv can exit this supervised process before its
+                # replacement finishes. Keep it alive and inherit the same Job.
+                return subprocess.run(command,check=False,
+                                      stdin=subprocess.DEVNULL,stdout=sys.stdout,stderr=sys.stderr,
+                                      creationflags=0x08000000 if os.name == 'nt' else 0).returncode
         print(json.dumps(result, ensure_ascii=False))
         return 0
     except (UpdateError, ManifestError, OSError, ValueError) as exc:
