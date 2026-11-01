@@ -128,7 +128,9 @@ class FinalGuard(unittest.TestCase):
         from unittest.mock import patch
         import room_reader
         class Reader:
-            def __init__(self):
+            def __init__(self,*,allowed_installations):
+                assert allowed_installations==room_reader.READER_SUPPORTED
+                self.installation=room_reader.EXPECTED
                 self.pid=1;self.created_at_filetime=1;self.initial_private=1
                 self.read_bytes=0;self.contexts=0;self.literal_candidates=0;self.envelope_stats=None
             def database(self,path):

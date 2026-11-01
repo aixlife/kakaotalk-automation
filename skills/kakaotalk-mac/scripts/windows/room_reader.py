@@ -25,6 +25,10 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 APP=Path(os.environ.get('ProgramFiles',r'C:\Program Files'))/'Kakao'/'KakaoTalk'/'KakaoTalk.exe'
 EXPECTED='abf66658c84c7a9a2f8300f9c3304a858bcacf8e3867bad33a79d769fd5321c1'
+# Experimental UI/attachment callers keep the original default build. Only the
+# read CLI opts into this separate, reviewed list; local files/env cannot add it.
+READER_SUPPORTED={EXPECTED:'26.8.2.5324',
+    'd7781cf275a6f4f23547e8e698005d0e8dbb78e205a34baa2eda3ea158fc64d1':'26.9.1.5339'}
 BASELINE=335675392
 MAX_READ=384*1024*1024
 LIMIT_SECONDS=40
@@ -41,11 +45,15 @@ class PM(C.Structure):
         ('pws','ws','pp','p','pnp','np','pf','ppf','private')]
 
 class Reader:
-    def __init__(self):
+    def __init__(self,*,allowed_installations=None):
         self.started=time.monotonic();self.read_bytes=0;self.contexts=0
         self.mbi_type=M
         self.handle=None
         self.snapshots=[];self.validated_keys=[];self.snapshot_retries=0;self.literal_candidates=0;self.key_route='envelope';self.envelope_stats=None
+        allowed=(EXPECTED,) if allowed_installations is None else tuple(allowed_installations)
+        assert allowed and all(value in READER_SUPPORTED for value in allowed),'UNREVIEWED_INSTALLATION_POLICY'
+        self.installation=reader_config.matched_installation(APP,allowed,architecture='x64')
+        assert self.installation,'INSTALLATION_CHANGED'
         self.k=C.WinDLL('kernel32');self.ps=C.WinDLL('psapi')
         self.k.OpenProcess.argtypes=[W.DWORD,W.BOOL,W.DWORD];self.k.OpenProcess.restype=W.HANDLE
         self.k.CloseHandle.argtypes=[W.HANDLE]
@@ -58,7 +66,6 @@ class Reader:
         self.ps.EnumProcesses.argtypes=[C.POINTER(W.DWORD),W.DWORD,C.POINTER(W.DWORD)]
         self.k.GetProcessTimes.argtypes=[W.HANDLE]+[C.POINTER(W.FILETIME)]*4
         self.k.GetExitCodeProcess.argtypes=[W.HANDLE,C.POINTER(W.DWORD)]
-        assert reader_config.installation_matches(APP,EXPECTED),'INSTALLATION_CHANGED'
         candidates=(W.DWORD*4096)();needed=W.DWORD()
         assert self.ps.EnumProcesses(candidates,C.sizeof(candidates),C.byref(needed)) and needed.value<C.sizeof(candidates),'PROCESS_ENUMERATION_LIMIT'
         matches=[]
@@ -393,7 +400,7 @@ def main():
     parser.add_argument('--key-route',choices=['codec','envelope'],default='envelope')
     args=parser.parse_args();reader=None;out={'status':'BLOCKED','input_calls':0,'clipboard_calls':0,'process_dump_saved':False,'key_saved':False,'plaintext_db_saved':False}
     try:
-        reader=Reader();reader.key_route=args.key_route;con=reader.database(reader.data/'chatListInfo.edb')
+        reader=Reader(allowed_installations=READER_SUPPORTED);reader.key_route=args.key_route;con=reader.database(reader.data/'chatListInfo.edb')
         try:
             from reader_queries import query_spec
             assert 1<=args.limit<=100,'QUERY_LIMIT_INVALID'
@@ -434,7 +441,7 @@ def main():
                     out.update(status='SEARCH_READ' if args.command=='search' else 'MESSAGES_READ',room=rooms[0],**selected_messages(reader,rows[0],args,con))
         finally:con.close()
         out.update(connection={'pid':reader.pid,'created_at_filetime':str(reader.created_at_filetime),
-                               'discovery':'fresh-process-enumeration','installation_sha256':EXPECTED,
+                               'discovery':'fresh-process-enumeration','installation_sha256':reader.installation,
                                'cached_pid_reused':False,'decryption_material_saved':False},
                    app_private_before=reader.initial_private,app_private_after=reader.guard(),
                    process_read_bytes=reader.read_bytes,codec_contexts=reader.contexts,raw_literal_candidates=reader.literal_candidates,

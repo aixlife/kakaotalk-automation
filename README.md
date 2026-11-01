@@ -8,6 +8,8 @@
 
 Windows 읽기는 **채팅창을 열어둘 필요가 없습니다.** 카카오톡은 로그인된 상태로 실행 중이어야 합니다. 다른 앱의 화면·키보드·마우스·클립보드를 조작하지 않습니다. 기본 읽기 스킬에는 메시지·파일 발송을 포함하지 않습니다.
 
+**Windows 읽기: 26.8.2.5324·26.9.1.5339의 검증된 x64 설치본을 지원합니다.** Windows 운영체제가 64비트여도 카카오톡 앱이 32비트면 지원하지 않습니다. 버전 번호와 앱의 비트 수를 함께 확인하세요. [공통 호환성 안내와 업데이트 절차](docs/windows-compatibility.md)에 진단·기존 설치 업그레이드·남은 제한을 정리했습니다.
+
 방 열기 실험은 검색·열기 순간에 카카오톡을 잠시 전면으로 가져옵니다. 화면 조작 없는 읽기와 구분해 사용하세요. [방 열기 사용법](experimental/room-open/README.md)과 [검증 범위](docs/room-opening-QA.md)에 실제로 확인한 동작과 남은 한계를 적었습니다.
 
 ## 설치하고 사용하기
@@ -27,7 +29,7 @@ Claude Code는 `--agent claude`를 사용합니다. 기본 동작은 변경 없�
 
 > “kakaotalk-mac 스킬로 내 환경을 확인하고, 가상 프로젝트 논의방의 최근 대화부터20건 읽어줘. 화면이나 보안·로그인 설정은 바꾸지 마.”
 
-Codex 설치 위치는 프로젝트의 `.agents/skills/kakaotalk-mac`, Claude Code는 `.claude/skills/kakaotalk-mac`입니다. 같은 내용이 이미 있으면 변경하지 않으며, 다른 내용이 있으면 덮어쓰거나 자동 백업하지 않고 중단합니다.
+Codex 설치 위치는 프로젝트의 `.agents/skills/kakaotalk-mac`, Claude Code는 `.claude/skills/kakaotalk-mac`입니다. 같은 내용이 이미 있으면 변경하지 않습니다. 일반 설치는 기존의 다른 내용을 덮어쓰지 않으며, 변경하지 않은 정식 배포본은 [명시적 업그레이드](docs/installation.md#기존-정식-설치본-업그레이드)로 백업 후 교체할 수 있습니다. 개인 수정본은 보존하고 중단합니다.
 
 - Mac: 이미 설치한 `katok`을 사용합니다. [스킬 본문](skills/kakaotalk-mac/SKILL.md)의 Mac 흐름을 따릅니다. Mac용 katok 바이너리는 이 저장소에 포함하지 않습니다.
 - Windows: Python3.11 이상 x64가 필요하며 실제 검증은3.14에서 했습니다. [Windows 사용법](skills/kakaotalk-mac/references/windows.md)의 준비 확인·조회 예제를 따릅니다. 런타임에 REA·Ghidra·WSL·SSH·화면 제어 도구는 필요하지 않습니다.
@@ -74,7 +76,7 @@ $python = (Resolve-Path '.venv\Scripts\python.exe').Path
 
 방 사전검사는 `python experimental/room-preflight/preflight.py --name "정확한 방 이름"`으로 실행합니다. 창이 없으면 `TARGET_WINDOW_NOT_FOUND`로 종료하며, 창 후보가 있어도 일반 방 ID와 HWND의 연결을 검증한 전송 준비 상태로 판정하지 않습니다.
 
-Windows 검증 설치본은 **26.8.2.5324 x64**입니다. 다른 빌드는 차단합니다. 고정된 실행 파일 해시만 바꾸는 방식으로 지원 범위를 넓히지 않습니다. [실제 QA와 남은 한계](docs/QA.md)를 확인하세요.
+Windows 읽기는 **26.8.2.5324·26.9.1.5339 x64**의 고정 해시를 허용합니다. **방 열기·첨부 등 실험 도구는 계속 26.8.2.5324 x64로 제한합니다.** 읽기 성공을 새 버전의 화면 조작·발신 지원으로 확대하지 않습니다. [새 빌드 QA](docs/compatibility-QA-20261102.md)와 [기존 전체 QA](docs/QA.md)를 확인하세요.
 
 **2026-10-27 별도 Windows 자기방 실물 검증을 완료했습니다.** TXT70B·PNG사진5,931B를 각1회 보내 새 자기방 수신 행과 서버 다운로드·회수본의 SHA-256 일치를 확인했습니다. 전송부터 해시 확인까지 관측한 두 구간에서 새로 표시된 카카오톡 최상위 창0개·전면 전환0회였고 전후 전면 창·커서는 같았습니다. 앱26.8.2.5324의 로그인된 Session1, 이미 열린 비최소화 자기방, 빈 입력칸, 다른 앱 전면, 실제 적용된 파일 확인 옵션 OFF 조건의 결과입니다. 동작 소스는 바꾸지 않았습니다. [첨부 QA 결과와 사용 조건](docs/attachments-QA.md)을 참고하세요.
 
@@ -93,6 +95,8 @@ Windows 런타임 의존성을 설치한 Python으로 합성 검사를 실행합
 ```sh
 python tools/check.py
 ```
+
+GitHub의 push·pull request에서도 Windows와 macOS 합성 검사를 실행합니다. 이 검사는 카카오톡이나 계정 데이터에 접근하지 않으므로 새 앱 빌드의 실물 읽기 검증을 대신하지 않습니다.
 
 [기여 방법](CONTRIBUTING.md), [보안·권리자 신고](SECURITY.md)를 참고하세요. 다른 앱 빌드 지원은 설치본 식별·읽기 권한·원문 대조·자원 상한·화면 불변 증거를 함께 검토합니다.
 

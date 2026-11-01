@@ -1,0 +1,44 @@
+name: Windows compatibility
+description: Report a version or architecture compatibility failure without private chat data.
+title: "[Compatibility] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share only software versions, architecture and the failure code.
+        Do not attach chats, room names or IDs, account paths, raw receipts, screenshots, keys or credentials.
+  - type: input
+    id: release
+    attributes:
+      label: Tool release or commit
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: KakaoTalk version and app architecture
+      description: Use doctor app_version and app_architecture. Windows OS bitness is a separate value.
+      placeholder: "26.9.1.5339 / x86"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Windows and Python versions, Python architecture
+  - type: input
+    id: reason
+    attributes:
+      label: Failure reason code
+      placeholder: "APP_X86_UNSUPPORTED"
+    validations:
+      required: true
+  - type: dropdown
+    id: modified
+    attributes:
+      label: Have the tool files been modified locally?
+      options:
+        - "No"
+        - "Yes"
+        - "Unknown"
+    validations:
+      required: true

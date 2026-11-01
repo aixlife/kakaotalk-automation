@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "releases": {
+    "v0.2.0": {
+      "commit": "5d887e4153f4bff9658246a0a47cae60e1112601",
+      "manifest_sha256": "77384a05a32449f25be95c5ced9d5a49829d16349541f950d53cd4621f08c234",
+      "manifest": {
+        "LICENSE": "d29cd2011e03665d1bb582127ef1f9e23eff74312d4c3255ef05b0ee50be3a43",
+        "SKILL.md": "884ce77d78b668448d9fbd67d014972de68d4f66a539dfefa6168fca1c51bcac",
+        "references/": null,
+        "references/windows.md": "333fb992abcf704c53622c6436edd574cdb0ddeda0adabadd815871804de0e27",
+        "scripts/": null,
+        "scripts/windows/": null,
+        "scripts/windows/kakao_read_win.py": "abe424c07f6340a15c6caf6139535c7ae628db00a4f4071f16fe28ac141ce021",
+        "scripts/windows/reader_config.py": "d17418f733cbcf7623e20044f0e67156c2fcd237d4828ca17094669b2e2fa12c",
+        "scripts/windows/reader_envelope.py": "aed9b8e532b2a1a9afb7d2e76b90228dc87b5619d877e8c1c176e3c1179ceb38",
+        "scripts/windows/reader_job.py": "c4b273cce227a318fe32aa5e12cf605641b536a0edf8e441a24faa227e47e133",
+        "scripts/windows/reader_queries.py": "8665fef1d8f1e7d9efa71de68e69dd5342c52269661447297f89af4c036ed0e5",
+        "scripts/windows/reader_rpc.py": "6c9f75ce38256f067ea268c7657512ac889ffaf6c447330c43b45c992f5c9896",
+        "scripts/windows/requirements.txt": "e6f2d177a7c426341286b633cde6d4cc32169c225da4da4d47a63640ec44d0f9",
+        "scripts/windows/room_reader.py": "ab449cee5d8cd8e2c1c40edd8529f2fdafb6d3dd2cbdafc1b14c1e28f589f963",
+        "scripts/windows/v2_key_derivation.py": "f493c22e36fb8489965edc4fb48046c825ccc68bb6ce218fc27dffd7dc334749",
+        "scripts/windows/vendor_appstate.py": "39ce09a25b7950dc0d79cec41cdab65173c0c07c18ac57b4dd7bc8f6c464ca92"
+      }
+    },
+    "v0.2.0-crlf": {
+      "commit": "5d887e4153f4bff9658246a0a47cae60e1112601",
+      "manifest_sha256": "5fe8f75573be50d495f54f4697f5046c0f5df1772437d3fe7f3560e31fb32a1b",
+      "manifest": {
+        "LICENSE": "2b8923fdaa5a7311cf3fd889dc7da14b6e49c971548c0fa43a7b6860fa7e9c9b",
+        "SKILL.md": "6d016320b80281e5894b58b1f56db4543a3655ba9ddae4638423d0dfb6ce0e0d",
+        "references/": null,
+        "references/windows.md": "4d4a07b117aeaf55027b6068d02455eb0a2309e14c8ab4d103afd176733ef839",
+        "scripts/": null,
+        "scripts/windows/": null,
+        "scripts/windows/kakao_read_win.py": "61f718eb0cb41187cb4b35f6bae14d85012558b33ba88f840013b2fcea032b00",
+        "scripts/windows/reader_config.py": "095e5d787da4287456ddf88aa21c5d48420d574279d509c708e9aaf07a468315",
+        "scripts/windows/reader_envelope.py": "27e17adb1c3eb55dfdb4637ac3eb475aaa7a7ef8416a5966a34e05e8c25280e9",
+        "scripts/windows/reader_job.py": "13f6bc4369178416ab6d96d8c55d04a289c32cc9a132f62570a8a9a189349db7",
+        "scripts/windows/reader_queries.py": "d68bd823a921ea4d795ae4978d8584aba4aba6eabe013b9a100dfd5e09857637",
+        "scripts/windows/reader_rpc.py": "bf34141d4f39fbc5a36a2e06ba96b822ba4fec837c41c71c4ea9c927281910de",
+        "scripts/windows/requirements.txt": "c43ff885bc14799c057f12dfee95c2e4833f45ea0899810289215d10313915a5",
+        "scripts/windows/room_reader.py": "96cbdee2a74b40017ccfdb170d3e489bf567be7ce5d93cb62fe92d0c237914a1",
+        "scripts/windows/v2_key_derivation.py": "fb6387a4ecb669c2e0c79e9bc86bc33848b03745d98e7cb4c12873f412ac4292",
+        "scripts/windows/vendor_appstate.py": "ae6c4abfc39627b2940e94a6669cebe7a20d0a5dcdf24d3154c640cd0de678fc"
+      }
+    }
+  }
+}

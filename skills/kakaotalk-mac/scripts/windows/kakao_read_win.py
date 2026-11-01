@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 import uuid
 
-from reader_config import ROOT,SOURCE_NAMES,state_root,installation_matches
+from reader_config import ROOT,SOURCE_NAMES,state_root,installation_report
 from reader_queries import MAX_HOURS,query_spec
 
 def read(args):
@@ -84,16 +84,22 @@ def main():
     if args.command=='doctor':
         try:
             import importlib.metadata
-            from room_reader import APP,EXPECTED
+            from room_reader import APP,EXPECTED,READER_SUPPORTED
             platform_ok=os.name=='nt' and struct.calcsize('P')==8 and sys.version_info>=(3,11)
             dependency=importlib.metadata.version('cryptography')
-            installed=installation_matches(APP,EXPECTED)
-            print(json.dumps({'status':'READY' if platform_ok and installed else 'BLOCKED',
+            alternate=Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Kakao'/'KakaoTalk'/'KakaoTalk.exe'
+            report=installation_report(APP,READER_SUPPORTED,EXPECTED,fallback=alternate)
+            if not platform_ok:
+                report.update(reason='WINDOWS_X64_PYTHON_REQUIRED',
+                    next_action='Run Python 3.11 or newer x64 on Windows.',
+                    supported_installation=False,reader_supported=False,
+                    room_open_supported=False,self_attachment_supported=False)
+            ready=platform_ok and report['supported_installation']
+            print(json.dumps({'status':'READY' if ready else 'BLOCKED',
                 'python':platform.python_version(),'windows_x64':platform_ok,
-                'cryptography':dependency,'supported_installation':installed,
-                'tested_app_version':'26.8.2.5324','app_launched':False,
-                'app_data_read':False,'settings_changed':False,'send_supported':False}))
-            return 0 if platform_ok and installed else 2
+                'cryptography':dependency,'app_launched':False,
+                'app_data_read':False,'settings_changed':False,'send_supported':False,**report}))
+            return 0 if ready else 2
         except Exception:
             print(json.dumps({'status':'BLOCKED','reason':'READINESS_CHECK_FAILED','settings_changed':False}))
             return 2
