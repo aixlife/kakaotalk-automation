@@ -1,2 +1,2 @@
-"""Validated v2 key route; no speculative research candidates are imported."""
+"""Validated x64 v2 route, with a separately authorized x86 candidate branch."""
 from v2_key_derivation import recover

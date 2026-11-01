@@ -128,9 +128,12 @@ class FinalGuard(unittest.TestCase):
         from unittest.mock import patch
         import room_reader
         class Reader:
-            def __init__(self,*,allowed_installations):
+            def __init__(self,*,allowed_installations,account_token,candidate_x86):
                 assert allowed_installations==room_reader.READER_SUPPORTED
+                assert account_token is None and candidate_x86 is False
                 self.installation=room_reader.EXPECTED
+                self.target_architecture='x64'
+                self.image_identity={}
                 self.pid=1;self.created_at_filetime=1;self.initial_private=1
                 self.read_bytes=0;self.contexts=0;self.literal_candidates=0;self.envelope_stats=None
             def database(self,path):
@@ -150,5 +153,8 @@ class FinalGuard(unittest.TestCase):
         result=json.loads(stream.getvalue())
         self.assertEqual(code,2);self.assertEqual(result['status'],'BLOCKED')
         self.assertEqual(result['reason'],'APP_MEMORY_LIMIT')
+        self.assertNotIn('rooms',result)
+        self.assertNotIn('messages',result)
+        self.assertNotIn('room',result)
 
 if __name__=='__main__':unittest.main()

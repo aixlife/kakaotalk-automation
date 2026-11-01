@@ -31,7 +31,7 @@ class RuntimeGuard(unittest.TestCase):
             installed=Path(temporary)/'kakaotalk-mac'
             shutil.copytree(SKILL,installed,ignore=shutil.ignore_patterns('__pycache__'))
             self.assertTrue((installed/'LICENSE').is_file())
-            self.assertEqual((installed/'scripts/windows/requirements.txt').read_text().strip(),'cryptography==47.0.0')
+            self.assertEqual((installed/'scripts/windows/requirements.txt').read_text().splitlines(),['cryptography==47.0.0','apsw==3.54.1.0'])
             result=subprocess.run([sys.executable,str(installed/'scripts/windows/kakao_read_win.py'),'--help'],capture_output=True,text=True,timeout=5)
             self.assertEqual(result.returncode,0)
             self.assertIn('doctor',result.stdout)

@@ -32,7 +32,7 @@ class Compatibility(unittest.TestCase):
     def setUp(self):
         temporary=tempfile.TemporaryDirectory(prefix='kakao-fictional-pe-')
         self.addCleanup(temporary.cleanup)
-        self.root=Path(temporary.name);self.app=self.root/'KakaoTalk.exe'
+        self.root=Path(temporary.name).resolve();self.app=self.root/'KakaoTalk.exe'
         self.app.write_bytes(fake_pe())
 
     def report(self,digest=NEW,primary=None,fallback=None):
@@ -166,7 +166,7 @@ class Compatibility(unittest.TestCase):
         connection.execute('CREATE TABLE chatRoomList(chatId,type,chatRoomTitle,titleDisplayMembers,lastUpdatedAt,directChatMemberId,linkId)')
         connection.execute("INSERT INTO chatRoomList VALUES(1,'MemoChat','Fictional self','',1,1,0)")
         fake=SimpleNamespace(data=self.root,database=Mock(return_value=connection),
-            installation=NEW,pid=123,created_at_filetime=456,initial_private=100,
+            installation=NEW,target_architecture='x64',image_identity={},pid=123,created_at_filetime=456,initial_private=100,
             guard=lambda:100,read_bytes=0,contexts=0,literal_candidates=0,
             snapshots=[],snapshot_retries=0,envelope_stats=None,started=time.monotonic(),close=Mock())
         output=io.StringIO()
@@ -175,11 +175,46 @@ class Compatibility(unittest.TestCase):
              patch('sys.argv',['room_reader.py','self','--limit','1']), \
              contextlib.redirect_stdout(output):
             self.assertEqual(room_reader.main(),0)
-        constructor.assert_called_once_with(allowed_installations=room_reader.READER_SUPPORTED)
+        constructor.assert_called_once_with(allowed_installations=room_reader.READER_SUPPORTED,account_token=None,candidate_x86=False)
         result=json.loads(output.getvalue())
         self.assertEqual(result['connection']['installation_sha256'],NEW)
         self.assertIsInstance(result['connection']['installation_sha256'],str)
         fake.close.assert_called_once()
+
+    def test_candidate_requires_explicit_policy_and_retains_host_pointer_abi(self):
+        self.app.write_bytes(fake_pe(0x14c,0x10b))
+        candidate=next(iter(room_reader.X86_CANDIDATES))
+        with patch.object(room_reader,'APP',self.app),patch.object(room_reader,'x86_app',return_value=self.app), \
+             patch.object(reader_config,'installation_digest',return_value=candidate), \
+             patch.object(room_reader.C,'WinDLL',side_effect=RuntimeError('NATIVE_BOUNDARY'),create=True):
+            with self.assertRaisesRegex(AssertionError,'INSTALLATION_CHANGED'):
+                room_reader.Reader(allowed_installations=room_reader.READER_SUPPORTED)
+            with self.assertRaisesRegex(AssertionError,'UNREVIEWED_INSTALLATION_POLICY'):
+                room_reader.Reader(candidate_x86=True)
+            reader=room_reader.Reader.__new__(room_reader.Reader)
+            with self.assertRaisesRegex(RuntimeError,'NATIVE_BOUNDARY'):
+                reader.__init__(allowed_installations=room_reader.X86_CANDIDATES,candidate_x86=True)
+            self.assertEqual(reader.target_pointer_bytes,4)
+            self.assertEqual(reader.address_limit,0x100000000)
+            self.assertIs(reader.mbi_type,room_reader.M)
+
+    def test_candidate_doctor_never_claims_stable_or_actual_read(self):
+        self.app.write_bytes(fake_pe(0x14c,0x10b))
+        output=io.StringIO();candidate=next(iter(room_reader.X86_CANDIDATES))
+        with patch.object(room_reader,'APP',self.app),patch.object(room_reader,'x86_app',return_value=self.app), \
+             patch.object(reader_config,'installation_digest',return_value=candidate), \
+             patch.object(reader_config,'file_version',return_value='26.9.1.5339'), \
+             patch.object(kakao_read_win,'os',SimpleNamespace(name='nt',environ={})), \
+             patch.object(kakao_read_win,'read') as read, \
+             patch('sys.argv',['kakao_read_win.py','doctor','--candidate-x86']),contextlib.redirect_stdout(output):
+            self.assertEqual(kakao_read_win.main(),0)
+        result=json.loads(output.getvalue())
+        self.assertEqual(result['status'],'CANDIDATE_READY')
+        self.assertEqual(result['read_verification'],'NOT_RUN')
+        self.assertFalse(result['reader_supported'])
+        self.assertFalse(result['room_open_supported'])
+        self.assertFalse(result['self_attachment_supported'])
+        read.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()

@@ -46,7 +46,7 @@ python tools/install.py --agent codex --project "PROJECT_PATH" --upgrade
 python tools/install.py --agent codex --project "PROJECT_PATH" --check
 ```
 
-`--upgrade-check`는 변경 없이 `READY_UPGRADE` 여부를 확인합니다. `--upgrade`는 내용이 정확히 일치하는 알려진 정식 배포본만 교체합니다. 현재 v0.2.0의 LF 및 Windows CRLF 체크아웃을 인정합니다. 개인 수정, 추가 파일, 알 수 없는 배포본은 차단합니다. 같은 최신 내용은 `UNCHANGED`입니다.
+`--upgrade-check`는 변경 없이 `READY_UPGRADE` 여부를 확인합니다. `--upgrade`는 내용이 정확히 일치하는 알려진 정식 배포본만 교체합니다. v0.2.0의 LF·Windows CRLF 체크아웃과 정확한 v0.3.0 배포본을 인정합니다. 개인 수정, 추가 파일, 알 수 없는 배포본은 차단합니다. 같은 최신 내용은 `UNCHANGED`입니다.
 
 새 폴더를 먼저 복사·검증하고, 기존 폴더를 프로젝트의 `.kakaotalk-mac-backups/<agent>/` 아래 고유 경로로 보존한 뒤 새 폴더로 교체합니다. 결과의 `backup` 경로를 보관합니다. 백업은 에이전트 스킬 검색 폴더 밖에 있으므로 예전 스킬이 함께 활성화되지 않습니다. 활성화 전 오류가 발생하면 원래 설치 복구를 시도합니다. 활성화 뒤 다른 변경을 발견하면 현재 폴더와 이전 백업을 모두 보존하고 중단합니다. 백업은 자동 삭제하지 않습니다. 동시 설치·업그레이드는 잠금으로 차단합니다.
 
@@ -56,7 +56,7 @@ python tools/install.py --agent codex --project "PROJECT_PATH" --check
 
 ## 런타임 준비와 첫 읽기
 
-Windows에서는 Python x64와 지원 KakaoTalk x64 설치본이 필요합니다. [Windows 사용법](../skills/kakaotalk-mac/references/windows.md)의 가상환경·고정 의존성 설치와 `doctor` 절차를 따릅니다. 설치기는 `pip`를 자동 실행하지 않습니다. 읽기 지원 설치본은 26.8.2.5324·26.9.1.5339 x64이며, 32비트 앱과 그 밖의 빌드 가드를 해제하지 않습니다. [공통 호환성 안내](windows-compatibility.md)를 확인하세요.
+Windows에서는 64비트 Windows와 Python 3.11 이상 x64가 필요합니다. [Windows 사용법](../skills/kakaotalk-mac/references/windows.md)의 가상환경·고정 의존성 설치와 `doctor` 절차를 따릅니다. 의존성은 `cryptography==47.0.0`, `apsw==3.54.1.0`이며 설치기는 `pip`를 자동 실행하지 않습니다. 읽기 지원 설치본은 26.8.2.5324·26.9.1.5339 x64입니다. 26.9.1.5339 x86은 [별도 소유자 검증 후보](windows-x86-probe.md)이고 실제 읽기 검증은 대기 중입니다. 카카오톡 재설치·버전 변경·해시 가드 해제로 해결하지 않습니다.
 
 macOS에서는 이미 설치한 `katok`이 필요합니다. 이 저장소에 Mac용 바이너리나 자동 설치기는 포함하지 않습니다. [스킬 본문](../skills/kakaotalk-mac/SKILL.md)의 준비 확인을 따릅니다.
 
@@ -65,6 +65,24 @@ macOS에서는 이미 설치한 `katok`이 필요합니다. 이 저장소에 Mac
 > “kakaotalk-mac 스킬로 내 환경을 확인하고, 가상 프로젝트 논의방의 최근 대화20건을 읽어줘. 화면이나 보안·로그인 설정은 바꾸지 마.”
 
 `doctor` 통과는 준비 확인이며 실제 대화 읽기 성공과 구분합니다. `BLOCKED`가 나오면 사유를 확인하고, 권한·로그인·앱 버전 가드를 바꾸어 우회하지 않습니다. 조회 결과에 원문이 포함될 수 있으므로 영수증을 Git·공유 문서·공개 Issue에 올리지 않습니다.
+
+## 검증된 업데이트 자동 적용 켜기
+
+자동 적용은 선택 사항입니다. 공개 저장소를 내려받은 폴더에서, 해당 프로젝트 사용자 동의 후 한 번 실행합니다. 아래 `$python`은 앞서 Windows 의존성을 설치한 가상환경의 Python입니다. 다른 가상환경이면 경로를 맞춥니다.
+
+```powershell
+$python = (Resolve-Path '.venv\Scripts\python.exe').Path
+& $python tools/reader_manager.py enable --project "PROJECT_PATH" --agent codex
+$manager = Join-Path 'PROJECT_PATH' '.kakaotalk-reader\reader_manager.py'
+& $python $manager status --agent codex
+& $python $manager read --agent codex -- messages --name "가상 프로젝트 논의방" --limit 3
+```
+
+`enable`은 고정 관리 실행기와 프로젝트 설정을 만들며 다운로드·기존 스킬 교체·예약 작업을 하지 않습니다. 기존 스킬 설치가 필수는 아니지만 AI가 관리 실행기를 사용하도록 안내해야 합니다. 관리 실행기를 통한 다음 읽기에서 현재 앱과 정확히 일치하는 실물 QA가 있는 정식 배포본만 받습니다. 일반 `$cli` 직접 실행에는 이 확인이 없습니다.
+
+관리 실행기와 payload는 프로젝트 안에 독립적으로 남습니다. 원본 저장소 없이도 관리형 읽기는 가능하지만, 32비트 시험 도구·수동 설치기·실험 도구를 사용하려면 저장소를 보관하세요. 관리 실행기 자체는 자동 갱신하지 않습니다. 정식 스킬 교체 뒤 새 대화에서 지침을 다시 읽게 하세요.
+
+끄기·실패 복구·사용자 수정 보존은 [자동 업데이트 안내](verified-updates.md), 여러 계정·큰 DB·다른 버전은 [호환성 안내](windows-compatibility.md)를 따릅니다. 32비트 후보 검증 결과가 나오기 전에는 자동 업데이트 지원 목록에 넣지 않습니다.
 
 ## 읽기와 실험 도구의 범위
 

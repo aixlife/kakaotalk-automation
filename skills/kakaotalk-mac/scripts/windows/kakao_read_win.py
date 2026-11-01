@@ -4,6 +4,21 @@
 Run on Windows with the user's own logged-in KakaoTalk process.
 Uses no SSH, interactive-session worker, daemon, clipboard or send operation.
 """
+import sys as _source_sys
+if __name__=='__main__' and not getattr(_source_sys,'_kakao_verified_source_bootstrap',None):
+    if not getattr(_source_sys.flags,'safe_path',False):_source_sys.path=_source_sys.path[1:]
+    import hashlib as _source_hashlib, pathlib as _source_pathlib, types as _source_types
+    _source_script=_source_pathlib.Path(__file__).resolve()
+    _source_helper=_source_script.with_name('reader_source.py')
+    if not 0<_source_helper.stat().st_size<=1048576:raise RuntimeError('READER_SOURCE_BOOTSTRAP_INVALID')
+    with _source_helper.open('rb') as _source_stream:_source_body=_source_stream.read(1048577)
+    if len(_source_body)>1048576:raise RuntimeError('READER_SOURCE_BOOTSTRAP_INVALID')
+    _source_module=_source_types.ModuleType('reader_source');_source_module.__file__=str(_source_helper)
+    _source_module.__verified_source_sha256__=_source_hashlib.sha256(_source_body).hexdigest()
+    _source_sys.modules['reader_source']=_source_module
+    exec(compile(_source_body,str(_source_helper),'exec',dont_inherit=True,optimize=0),_source_module.__dict__)
+    _source_module.bootstrap_current(_source_script,_source_sys.argv[1:])
+    raise SystemExit(0)
 import argparse
 import hashlib
 import json
@@ -42,6 +57,8 @@ def read(args):
         value=getattr(args,key,None)
         if value is not None:argv+=['--'+key.replace('_','-'),str(value)]
     argv+=['--key-route',args.key_route]
+    if getattr(args,'account_token',None):argv+=['--account-token',args.account_token]
+    if getattr(args,'candidate_x86',False):argv+=['--candidate-x86']
     transport=uuid.uuid4().hex
     request={'source_sha256':hashes[source.name],'source_hashes':hashes,'args':argv}
     record={'request_id':transport,'request':request,'source_hashes':hashes,
@@ -67,8 +84,10 @@ def save(path,record,replace=False):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['doctor','schema','rooms','self','messages','search','resume'])
+    parser.add_argument('command',choices=['doctor','accounts','schema','rooms','self','messages','search','resume'])
     parser.add_argument('--request-id',help='resume: fetch an existing read result without re-execution')
+    parser.add_argument('--account-token',help='Explicit opaque account token from accounts; never auto-select a backup')
+    parser.add_argument('--candidate-x86',action='store_true',help='Explicit 26.9.1 x86 candidate probe; not stable support')
     parser.add_argument('--name',help='Room search text, or exact title for messages')
     parser.add_argument('--hours',type=int,default=24)
     parser.add_argument('--limit',type=int,default=20)
@@ -81,21 +100,44 @@ def main():
     parser.add_argument('--key-route',choices=['codec','envelope'],default='envelope',
                         help='envelope: validated v2 derivation; codec: live-codec diagnostic')
     args=parser.parse_args()
+    if args.command=='accounts':
+        try:
+            if os.name!='nt':raise RuntimeError('WINDOWS_REQUIRED')
+            from reader_accounts import inventory_accounts
+            accounts=inventory_accounts(Path(os.environ['LOCALAPPDATA'])/'Kakao'/'KakaoTalk'/'users')
+            print(json.dumps({'status':'ACCOUNT_METADATA_READ','accounts':accounts,'app_memory_read':False,
+                'database_contents_read':False,'automatic_account_selection':False,'send_attempted':False}))
+            return 0
+        except Exception as exc:
+            print(json.dumps({'status':'BLOCKED','reason':str(exc) if isinstance(exc,RuntimeError) else 'ACCOUNT_METADATA_UNAVAILABLE'}))
+            return 2
     if args.command=='doctor':
         try:
             import importlib.metadata
-            from room_reader import APP,EXPECTED,READER_SUPPORTED
+            from room_reader import APP,EXPECTED,READER_SUPPORTED,X86_CANDIDATES,x86_app
             platform_ok=os.name=='nt' and struct.calcsize('P')==8 and sys.version_info>=(3,11)
             dependency=importlib.metadata.version('cryptography')
             alternate=Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Kakao'/'KakaoTalk'/'KakaoTalk.exe'
             report=installation_report(APP,READER_SUPPORTED,EXPECTED,fallback=alternate)
+            candidate_path=x86_app()
+            candidate=installation_report(candidate_path,{},EXPECTED)
+            candidate_ok=candidate['installation_sha256'] in X86_CANDIDATES and candidate['app_architecture']=='x86'
+            report['candidate_probe_available']=candidate_ok
+            if args.candidate_x86:
+                report=candidate
+                report.update(candidate_probe_available=candidate_ok,candidate_only=True,
+                    reason=None if candidate_ok else 'CANDIDATE_INSTALLATION_CHANGED',
+                    next_action='Run an owner-approved candidate probe; actual x86 reading is not yet established.',
+                    matched_app_version=X86_CANDIDATES.get(candidate['installation_sha256']),
+                    supported_installation=False,reader_supported=False,
+                    room_open_supported=False,self_attachment_supported=False)
             if not platform_ok:
                 report.update(reason='WINDOWS_X64_PYTHON_REQUIRED',
                     next_action='Run Python 3.11 or newer x64 on Windows.',
                     supported_installation=False,reader_supported=False,
                     room_open_supported=False,self_attachment_supported=False)
-            ready=platform_ok and report['supported_installation']
-            print(json.dumps({'status':'READY' if ready else 'BLOCKED',
+            ready=platform_ok and (candidate_ok if args.candidate_x86 else report['supported_installation'])
+            print(json.dumps({'status':('CANDIDATE_READY' if args.candidate_x86 else 'READY') if ready else 'BLOCKED',
                 'python':platform.python_version(),'windows_x64':platform_ok,
                 'cryptography':dependency,'app_launched':False,
                 'app_data_read':False,'settings_changed':False,'send_supported':False,**report}))
@@ -104,6 +146,8 @@ def main():
             print(json.dumps({'status':'BLOCKED','reason':'READINESS_CHECK_FAILED','settings_changed':False}))
             return 2
     if not 1<=args.limit<=100 or not 1<=args.hours<=MAX_HOURS:parser.error('limit: 1..100; hours: 1..87600')
+    if args.candidate_x86 and args.key_route!='envelope':parser.error('candidate x86 permits the envelope route only')
+    if args.account_token and (len(args.account_token)!=64 or any(c not in '0123456789abcdef' for c in args.account_token)):parser.error('account token: 64 lowercase hexadecimal characters')
     try:query_spec(args)
     except AssertionError as exc:parser.error(str(exc))
     if args.command in ('rooms','messages','search') and not args.name:parser.error('--name is required')

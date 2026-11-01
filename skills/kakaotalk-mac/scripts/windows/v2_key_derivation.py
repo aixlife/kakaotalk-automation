@@ -1,6 +1,6 @@
 """Exact observed v2 mode-1 derivation; keys remain in this bounded child.
 
-REA and synthetic x86 tracing identify HMAC-SHA256(binding, IKM ||
+REA and synthetic x64 tracing identify HMAC-SHA256(binding, IKM ||
 "entropy-bound-kek"), followed by HKDF-SHA256 with the stored salt and the
 prefix plus normalized relative file path. A result is accepted only after
 AES-KW integrity AND the selected database's SQLCipher page authentication.
@@ -12,7 +12,7 @@ from pathlib import Path
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.keywrap import aes_key_unwrap,InvalidUnwrap
-from vendor_appstate import parse_file
+from vendor_appstate import parse_bytes
 
 DOMAIN=b'entropy-bound-kek'
 
@@ -40,8 +40,8 @@ def typed_inputs(reader,state_base,stats):
     except (ValueError,UnicodeError,OSError):return None
     if not path.is_relative_to(reader.data.parent.resolve()) or not path.is_file():return None
     if path.stat().st_size!=40:return None
-    before=reader.file_hash(path);wrapped=path.read_bytes()
-    assert before==reader.file_hash(path),'IKM_CONTAINER_CHANGED'
+    before=reader.file_hash(path,maximum=40);wrapped=reader.files.bounded_read(path,40,exact=40)
+    assert before==reader.file_hash(path,maximum=40),'IKM_CONTAINER_CHANGED'
     try:ikm=aes_key_unwrap(hmac.new(binding,identity+b'ikm-wrap',hashlib.sha256).digest(),wrapped)
     except InvalidUnwrap:return None
     if len(ikm)!=32:return None
@@ -49,15 +49,19 @@ def typed_inputs(reader,state_base,stats):
     return ikm,binding
 
 def recover(reader,target,first):
+    reader.envelope_stats=None
     reader.guard();state_path=reader.data.parent/'appstate.dat'
     assert 0<state_path.stat().st_size<=1024*1024,'ENVELOPE_SIZE_LIMIT'
-    before=reader.file_hash(state_path);state=parse_file(str(state_path))
+    before=reader.file_hash(state_path)
+    state=parse_bytes(reader.files.bounded_read(state_path,1024*1024),str(state_path))
     assert before==reader.file_hash(state_path),'ENVELOPE_CHANGED_DURING_READ'
     assert state.info_prefix==b'v2:' and len(state.salt)==32,'ENVELOPE_VERSION_UNSUPPORTED'
     assert (target.parent==reader.data and target.name.endswith('.edb')) or (target.parent==reader.data.parent and target.name=='TalkUserDB.edb'),'SELECTED_DB_PATH_REQUIRED'
     relative=('chat_data\\' if target.parent==reader.data else '')+target.name;wrapped=state.wrapped_for(relative)
     assert wrapped and len(wrapped)==40,'SELECTED_WRAPPED_KEY_MISSING'
-    stats={'version':'v2','native_kdf_mode':1,'implemented':True,'salt_matches':0,
+    pointer_bytes=getattr(reader,'target_pointer_bytes',8)
+    stats={'version':'v2','native_kdf_mode':1 if pointer_bytes==8 else None,
+           'candidate_x86':pointer_bytes==4,'implemented':True,'salt_matches':0,
            'matching_state_prefixes':0,'ikm_container_wrap_integrity':False,
            'target_wrap_integrity':False,'target_page_hmac':False}
     reader.envelope_stats=stats
@@ -73,11 +77,12 @@ def recover(reader,target,first):
         reader.validated_keys.append(key)
         return key
     address=0;carry=b'';last_end=None;seen=set();regions=0
-    while address<0x7fffffffffff:
+    address_limit=getattr(reader,'address_limit',0x7fffffffffff)
+    while address<address_limit:
         reader.guard();m=reader.mbi_type()
         if not reader.k.VirtualQueryEx(reader.handle,address,C.byref(m),C.sizeof(m)):break
         regions+=1;assert regions<30000,'ENVELOPE_REGION_LIMIT'
-        base=int(m.base or 0);end=base+m.size
+        base=int(m.base or 0);end=min(base+m.size,address_limit)
         if end<=address:break
         if m.kind==0x20000 and m.state==0x1000 and m.protect in (2,4,8,32,64,128):
             position=base
@@ -89,27 +94,32 @@ def recover(reader,target,first):
                 while True:
                     hit=data.find(state.salt,offset)
                     if hit<0:break
-                    offset=hit+1;state_base=origin+hit-0x40
+                    offset=hit+1;salt_address=origin+hit;state_base=salt_address-0x40
                     if state_base in seen:continue
                     seen.add(state_base);stats['salt_matches']+=1
                     assert len(seen)<=256,'ENVELOPE_SALT_MATCH_LIMIT'
-                    prefix=reader.memory(state_base+0x20,32)
-                    if prefix is None or prefix[:3]!=b'v2:':continue
-                    length,capacity=struct.unpack_from('<QQ',prefix,16)
-                    if length!=3 or not 3<=capacity<=15:continue
-                    stats['matching_state_prefixes']+=1
-                    inputs=typed_inputs(reader,state_base,stats)
-                    if inputs is None:continue
-                    ikm,binding=inputs;kek=file_kek(ikm,binding,state.salt,state.info_prefix,relative)
-                    try:key=aes_key_unwrap(kek,wrapped)
-                    except InvalidUnwrap:continue
-                    stats['target_wrap_integrity']=True
-                    if len(key)!=32 or not reader.valid_page(first,key,1,first[:16]):continue
-                    stats.update(target_page_hmac=True,selected_room_key_validated=True,
-                                 derivation='bound-HMAC-SHA256_then_HKDF-SHA256')
-                    reader.validated_keys.append(key)
-                    reader.envelope_inputs=(before,reader.account_scope,ikm,binding)
-                    return key
+                    if pointer_bytes==4:
+                        from reader_x86 import try_x86_inputs
+                        candidates=try_x86_inputs(reader,salt_address,stats)
+                    else:
+                        prefix=reader.memory(state_base+0x20,32)
+                        if prefix is None or prefix[:3]!=b'v2:':continue
+                        length,capacity=struct.unpack_from('<QQ',prefix,16)
+                        if length!=3 or not 3<=capacity<=15:continue
+                        stats['matching_state_prefixes']+=1
+                        inputs=typed_inputs(reader,state_base,stats)
+                        candidates=(inputs,) if inputs is not None else ()
+                    for ikm,binding in candidates:
+                        kek=file_kek(ikm,binding,state.salt,state.info_prefix,relative)
+                        try:key=aes_key_unwrap(kek,wrapped)
+                        except InvalidUnwrap:continue
+                        stats['target_wrap_integrity']=True
+                        if len(key)!=32 or not reader.valid_page(first,key,1,first[:16]):continue
+                        stats.update(target_page_hmac=True,selected_room_key_validated=True,
+                                     derivation='bound-HMAC-SHA256_then_HKDF-SHA256')
+                        reader.validated_keys.append(key)
+                        reader.envelope_inputs=(before,reader.account_scope,ikm,binding)
+                        return key
                 carry=data[-256:];last_end=position+size;position+=size
         else:carry=b'';last_end=None
         address=end

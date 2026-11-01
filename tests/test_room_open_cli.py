@@ -258,7 +258,7 @@ class PortableGuards(unittest.TestCase):
 
     def test_package_sources_and_common_lock_contract(self):
         hashes = CLI.sources()
-        self.assertEqual(len(hashes), 13)
+        self.assertEqual(len(hashes), 19)
         self.assertIn('preview/attachment_runtime_preview.py', hashes)
         self.assertIn('room-open/hybrid_ui_win.py', hashes)
         self.assertTrue(all(len(value) == 64 for value in hashes.values()))

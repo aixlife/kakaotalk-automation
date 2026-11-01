@@ -6,6 +6,21 @@ Unlike that implementation, process bytes, keys and decrypted DBs are never
 written to disk. Reads stream through 64KiB buffers with strict bounds.
 64-bit pointers follow upstream SQLCipher codec_ctx/cipher_ctx layouts.
 """
+import sys as _source_sys
+if __name__=='__main__' and not getattr(_source_sys,'_kakao_verified_source_bootstrap',None):
+    if not getattr(_source_sys.flags,'safe_path',False):_source_sys.path=_source_sys.path[1:]
+    import hashlib as _source_hashlib, pathlib as _source_pathlib, types as _source_types
+    _source_script=_source_pathlib.Path(__file__).resolve()
+    _source_helper=_source_script.with_name('reader_source.py')
+    if not 0<_source_helper.stat().st_size<=1048576:raise RuntimeError('READER_SOURCE_BOOTSTRAP_INVALID')
+    with _source_helper.open('rb') as _source_stream:_source_body=_source_stream.read(1048577)
+    if len(_source_body)>1048576:raise RuntimeError('READER_SOURCE_BOOTSTRAP_INVALID')
+    _source_module=_source_types.ModuleType('reader_source');_source_module.__file__=str(_source_helper)
+    _source_module.__verified_source_sha256__=_source_hashlib.sha256(_source_body).hexdigest()
+    _source_sys.modules['reader_source']=_source_module
+    exec(compile(_source_body,str(_source_helper),'exec',dont_inherit=True,optimize=0),_source_module.__dict__)
+    _source_module.bootstrap_current(_source_script,_source_sys.argv[1:])
+    raise SystemExit(0)
 import argparse
 import reader_config
 import ctypes as C
@@ -29,6 +44,10 @@ EXPECTED='abf66658c84c7a9a2f8300f9c3304a858bcacf8e3867bad33a79d769fd5321c1'
 # read CLI opts into this separate, reviewed list; local files/env cannot add it.
 READER_SUPPORTED={EXPECTED:'26.8.2.5324',
     'd7781cf275a6f4f23547e8e698005d0e8dbb78e205a34baa2eda3ea158fc64d1':'26.9.1.5339'}
+# Explicit owner-run candidate only. No stable approval or UI capability.
+X86_CANDIDATES={'86f384d1694c74a611181e6c88509e8f59eb8d9739ae3d7789711a9355757500':'26.9.1.5339'}
+def x86_app():
+    return Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Kakao'/'KakaoTalk'/'KakaoTalk.exe'
 BASELINE=335675392
 MAX_READ=384*1024*1024
 LIMIT_SECONDS=40
@@ -45,15 +64,23 @@ class PM(C.Structure):
         ('pws','ws','pp','p','pnp','np','pf','ppf','private')]
 
 class Reader:
-    def __init__(self,*,allowed_installations=None):
+    def __init__(self,*,allowed_installations=None,account_token=None,candidate_x86=False):
         self.started=time.monotonic();self.read_bytes=0;self.contexts=0
         self.mbi_type=M
         self.handle=None
         self.snapshots=[];self.validated_keys=[];self.snapshot_retries=0;self.literal_candidates=0;self.key_route='envelope';self.envelope_stats=None
         allowed=(EXPECTED,) if allowed_installations is None else tuple(allowed_installations)
-        assert allowed and all(value in READER_SUPPORTED for value in allowed),'UNREVIEWED_INSTALLATION_POLICY'
-        self.installation=reader_config.matched_installation(APP,allowed,architecture='x64')
+        policy=X86_CANDIDATES if candidate_x86 else READER_SUPPORTED
+        assert allowed and all(value in policy for value in allowed),'UNREVIEWED_INSTALLATION_POLICY'
+        self.target_architecture='x86' if candidate_x86 else 'x64'
+        self.target_pointer_bytes=4 if candidate_x86 else 8
+        self.address_limit=0x100000000 if candidate_x86 else 0x7fffffffffff
+        self.app=x86_app() if candidate_x86 else APP
+        from reader_image import image_file_identity,verify_mapped_image
+        disk_identity=image_file_identity(self.app)
+        self.installation=reader_config.matched_installation(self.app,allowed,architecture=self.target_architecture)
         assert self.installation,'INSTALLATION_CHANGED'
+        assert image_file_identity(self.app)==disk_identity,'DISK_IMAGE_CHANGED'
         self.k=C.WinDLL('kernel32');self.ps=C.WinDLL('psapi')
         self.k.OpenProcess.argtypes=[W.DWORD,W.BOOL,W.DWORD];self.k.OpenProcess.restype=W.HANDLE
         self.k.CloseHandle.argtypes=[W.HANDLE]
@@ -74,18 +101,21 @@ class Reader:
             h=self.k.OpenProcess(0x1000,False,pid)
             if not h:continue
             try:
-                if self.process_path(h)==str(APP).casefold():matches.append((pid,self.process_created(h)))
+                if self.process_path(h)==str(self.app).casefold():matches.append((pid,self.process_created(h)))
             finally:self.k.CloseHandle(h)
         from reader_queries import unique_process
         self.pid,self.created_at_filetime=unique_process(matches)
         self.handle=self.k.OpenProcess(0x1010,False,self.pid)
         assert self.handle,'PROCESS_READ_UNAVAILABLE'
-        assert self.process_path(self.handle)==str(APP).casefold() and self.process_created(self.handle)==self.created_at_filetime,'PROCESS_IDENTITY_CHANGED'
-        roots=list((Path(os.environ['LOCALAPPDATA'])/'Kakao'/'KakaoTalk'/'users').iterdir())
-        accounts=[p for p in roots if p.is_dir() and (p/'chat_data'/'chatListInfo.edb').is_file()]
-        assert len(accounts)==1,'ACCOUNT_NOT_UNIQUE'
-        self.data=accounts[0]/'chat_data'
-        self.account_scope=hashlib.sha256(str(accounts[0]).casefold().encode()).hexdigest()
+        assert self.process_path(self.handle)==str(self.app).casefold() and self.process_created(self.handle)==self.created_at_filetime,'PROCESS_IDENTITY_CHANGED'
+        assert image_file_identity(self.app)==disk_identity,'DISK_IMAGE_CHANGED'
+        self.image_identity=verify_mapped_image(self,self.app)
+        assert image_file_identity(self.app)==disk_identity,'DISK_IMAGE_CHANGED'
+        self.disk_identity=disk_identity
+        from reader_accounts import select_account_lease
+        account,self.files=select_account_lease(Path(os.environ['LOCALAPPDATA'])/'Kakao'/'KakaoTalk'/'users',account_token)
+        self.data=account/'chat_data'
+        self.account_scope=hashlib.sha256(str(account).casefold().encode()).hexdigest()
         self.initial_private=self.guard()
 
     def process_path(self,handle):
@@ -98,6 +128,7 @@ class Reader:
         return values[0].dwHighDateTime<<32|values[0].dwLowDateTime
 
     def guard(self):
+        if hasattr(self,'files'):self.files.guard()
         assert time.monotonic()-self.started<LIMIT_SECONDS,'TIME_LIMIT'
         assert self.read_bytes<=MAX_READ,'PROCESS_READ_LIMIT'
         alive=W.DWORD()
@@ -112,7 +143,7 @@ class Reader:
     def memory(self,a,n):
         self.guard()
         assert self.read_bytes+n<=MAX_READ,'PROCESS_READ_LIMIT'
-        if not (0x10000<=a<0x7fffffffffff and 0<n<=65536):return None
+        if not (0x10000<=a<a+n<=self.address_limit and 0<n<=65536):return None
         m=M()
         if not self.k.VirtualQueryEx(self.handle,a,C.byref(m),C.sizeof(m)):return None
         if m.kind!=0x20000 or m.state!=0x1000 or m.protect not in (2,4,8,32,64,128) or a+n>m.base+m.size:return None
@@ -129,6 +160,7 @@ class Reader:
         return hmac.compare_digest(hmac.new(hk,body,hashlib.sha512).digest(),page[PAGE-64:PAGE])
 
     def recover(self,first):
+        assert self.target_pointer_bytes==8,'X86_CODEC_ROUTE_NOT_REVIEWED'
         for known in self.validated_keys:
             if self.valid_page(first,known,1,first[:16]):return known
         # Metadata signature only. Never retain region contents or candidate
@@ -214,9 +246,16 @@ class Reader:
                 committed.update(pending);pending.clear();dbsize=size;committed_frames=index
         return {p:o for p,o in committed.items() if dbsize is not None and p<=dbsize},dbsize,committed_frames
 
-    @staticmethod
-    def file_hash(path):
-        with path.open('rb') as f:return hashlib.file_digest(f,'sha256').digest()
+    def file_hash(self,path,maximum=None):
+        maximum=maximum or (1024*1024 if path.name=='appstate.dat' else 24*1024*1024 if path.name.endswith(('.edb','.edb-wal')) else 40)
+        digest=hashlib.sha256();count=0
+        with self.files.open(path,max_bytes=maximum) as f:
+            while True:
+                self.guard();part=f.read(min(65536,maximum-count+1))
+                if not part:break
+                count+=len(part);assert count<=maximum,'ACCOUNT_FILE_TOO_LARGE'
+                digest.update(part)
+        return digest.digest()
 
     def capture_files(self,path):
         moving={'DB_CHANGED_DURING_READ','DB_DOUBLE_READ_MISMATCH','WAL_APPEARANCE_CHANGED','WAL_CHANGED_DURING_READ','WAL_DOUBLE_READ_MISMATCH'}
@@ -231,7 +270,8 @@ class Reader:
         before=path.stat();assert 4096<=before.st_size<=24*1024*1024 and before.st_size%4096==0,'DB_SIZE_LIMIT'
         wal_path=path.with_name(path.name+'-wal');wal_before=wal_path.stat() if wal_path.exists() else None
         if wal_before:assert wal_before.st_size<=24*1024*1024,'WAL_SIZE_LIMIT'
-        encrypted=path.read_bytes();wal=wal_path.read_bytes() if wal_before else b'';after=path.stat()
+        encrypted=self.files.bounded_read(path,24*1024*1024)
+        wal=self.files.bounded_read(wal_path,24*1024*1024) if wal_before else b'';after=path.stat()
         assert (before.st_size,before.st_mtime_ns)==(after.st_size,after.st_mtime_ns),'DB_CHANGED_DURING_READ'
         assert self.file_hash(path)==hashlib.sha256(encrypted).digest(),'DB_DOUBLE_READ_MISMATCH'
         assert wal_path.exists()==bool(wal_before),'WAL_APPEARANCE_CHANGED'
@@ -241,10 +281,35 @@ class Reader:
             assert self.file_hash(wal_path)==hashlib.sha256(wal).digest(),'WAL_DOUBLE_READ_MISMATCH'
         return encrypted,wal
 
+    def stream_database(self,path):
+        from reader_snapshot import SnapshotBudget,open_snapshot
+        if not hasattr(self,'snapshot_budget'):self.snapshot_budget=SnapshotBudget(guard=self.guard)
+        from reader_envelope import recover
+        callback=(lambda first:recover(self,path,first)) if self.key_route=='envelope' else self.recover
+        kind='room-list' if path.name=='chatListInfo.edb' else 'profiles' if path.name=='TalkUserDB.edb' else 'selected-messages'
+        con=open_snapshot(path,recover_key=callback,budget=self.snapshot_budget,kind=kind,
+                          opener=self.files.open,scope_guard=self.files.guard)
+        self.snapshots.append(con.receipt)
+        return con
+
     def database(self,path):
         self.guard();assert (path.parent==self.data and path.suffix=='.edb') or (path.parent==self.data.parent and path.name=='TalkUserDB.edb'),'DB_OUTSIDE_ACCOUNT'
+        assert not path.is_symlink() and path.resolve().is_relative_to(self.data.parent.resolve()),'DB_OUTSIDE_ACCOUNT'
+        assert not getattr(path.stat(),'st_file_attributes',0)&0x400,'DB_UNSAFE_PATH'
+        wal_path=path.with_name(path.name+'-wal')
+        if path.stat().st_size>24*1024*1024 or (wal_path.exists() and wal_path.stat().st_size>24*1024*1024):
+            return self.stream_database(path)
         encrypted,wal=self.capture_files(path)
-        frames,dbsize,committed_count=self.wal_pages(wal)
+        needs_stream=False
+        try:frames,dbsize,committed_count=self.wal_pages(wal)
+        except AssertionError as exc:
+            if str(exc) not in ('WAL_PAGE_LIMIT','WAL_DATABASE_LIMIT'):raise
+            needs_stream=True
+        if needs_stream:
+            # A small physical DB plus committed WAL can exceed the old logical
+            # snapshot size. Discard buffers and revalidate from the start.
+            del encrypted,wal
+            return self.stream_database(path)
         if self.key_route=='envelope':
             from reader_envelope import recover
             key=recover(self,path,encrypted[:PAGE])
@@ -398,9 +463,16 @@ def main():
     parser.add_argument('--query')
     parser.add_argument('--cursor')
     parser.add_argument('--key-route',choices=['codec','envelope'],default='envelope')
-    args=parser.parse_args();reader=None;out={'status':'BLOCKED','input_calls':0,'clipboard_calls':0,'process_dump_saved':False,'key_saved':False,'plaintext_db_saved':False}
+    parser.add_argument('--account-token')
+    parser.add_argument('--candidate-x86',action='store_true')
+    def empty_result():
+        return {'status':'BLOCKED','input_calls':0,'clipboard_calls':0,'send_calls':0,'process_dump_saved':False,'key_saved':False,'plaintext_db_saved':False}
+    args=parser.parse_args();reader=None;out=empty_result()
     try:
-        reader=Reader(allowed_installations=READER_SUPPORTED);reader.key_route=args.key_route;con=reader.database(reader.data/'chatListInfo.edb')
+        assert not args.candidate_x86 or args.key_route=='envelope','X86_CODEC_ROUTE_NOT_REVIEWED'
+        reader=Reader(allowed_installations=X86_CANDIDATES if args.candidate_x86 else READER_SUPPORTED,
+                      account_token=args.account_token,candidate_x86=args.candidate_x86)
+        reader.key_route=args.key_route;con=reader.database(reader.data/'chatListInfo.edb')
         try:
             from reader_queries import query_spec
             assert 1<=args.limit<=100,'QUERY_LIMIT_INVALID'
@@ -440,14 +512,26 @@ def main():
                     assert len(rows)==1,'ROOM_NOT_UNIQUE_OR_NOT_FOUND'
                     out.update(status='SEARCH_READ' if args.command=='search' else 'MESSAGES_READ',room=rooms[0],**selected_messages(reader,rows[0],args,con))
         finally:con.close()
+        if hasattr(reader,'disk_identity'):
+            from reader_image import image_file_identity
+            assert image_file_identity(reader.app)==reader.disk_identity,'DISK_IMAGE_CHANGED'
         out.update(connection={'pid':reader.pid,'created_at_filetime':str(reader.created_at_filetime),
                                'discovery':'fresh-process-enumeration','installation_sha256':reader.installation,
+                               'app_architecture':reader.target_architecture,
+                               'candidate_only':args.candidate_x86,
+                               'image_identity':reader.image_identity,
                                'cached_pid_reused':False,'decryption_material_saved':False},
                    app_private_before=reader.initial_private,app_private_after=reader.guard(),
                    process_read_bytes=reader.read_bytes,codec_contexts=reader.contexts,raw_literal_candidates=reader.literal_candidates,
                    snapshots=reader.snapshots,snapshot_retries=reader.snapshot_retries,envelope=reader.envelope_stats,
                    elapsed_sec=round(time.monotonic()-reader.started,3))
+        if hasattr(reader,'snapshot_budget'):
+            out.update(snapshot_file_read_bytes=reader.snapshot_budget.file_read_bytes,
+                       snapshot_peak_buffer_bytes=reader.snapshot_budget.peak_buffer_bytes)
     except Exception as exc:
+        # Never expose a partial room/message result after final scope, close,
+        # installation identity or resource verification fails.
+        out=empty_result()
         out.update(status='BLOCKED',error_type=type(exc).__name__,reason=str(exc) if isinstance(exc,(AssertionError,RuntimeError)) else 'DETAILS_WITHHELD')
         out['source_line']=traceback.extract_tb(exc.__traceback__)[-1].lineno
         if reader:out.update(process_read_bytes=reader.read_bytes,codec_contexts=reader.contexts,raw_literal_candidates=reader.literal_candidates)

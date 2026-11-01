@@ -23,8 +23,11 @@ def process(payload):
         from reader_job import run
         # The full reader runner + decryptor tree shares this outer 256MiB Job.
         # Its inner reader Job and the 40-second source guard remain enabled.
-        execution=run([sys.executable,str(ROOT/'reader_job.py'),request_path.name],
+        from reader_source import verified_argv,manifest_sha256,SOURCE_METHOD
+        request_digest=hashlib.sha256(encoded.encode('utf8')).hexdigest()
+        execution=run(verified_argv(ROOT,hashes,'reader_job.py',[request_path.name,request_digest]),
                       state/(stem+'-rpc-output.json'),50)
+        execution.update(source_execution=SOURCE_METHOD,source_manifest_sha256=manifest_sha256(hashes))
         with (state/(stem+'-rpc-receipt.json')).open('x') as f:json.dump(execution,f)
     request=load(request_path)
     outer_path=state/(stem+'-rpc-receipt.json');outer=load(outer_path) if outer_path.exists() else None

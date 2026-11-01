@@ -121,7 +121,14 @@ class AppState:
 
 
 def parse_file(path: str) -> AppState:
-    data = open(path, "rb").read()
+    with open(path, "rb") as stream:
+        data = stream.read(1024 * 1024 + 1)
+    return parse_bytes(data, path)
+
+
+def parse_bytes(data: bytes, path: str = "") -> AppState:
+    if not 0 < len(data) <= 1024 * 1024:
+        raise ValueError("appstate size limit")
     reader = CborReader(data)
     root = reader.obj()
     if reader.pos != len(data):

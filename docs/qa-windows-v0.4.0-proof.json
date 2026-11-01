@@ -1,0 +1,120 @@
+{
+  "schema": "windows-kakao-reader-probe/v1",
+  "status": "READ_VERIFIED_PENDING_OWNER_MATCH",
+  "capability": "reader-only",
+  "stable_eligible": false,
+  "candidate_only": false,
+  "maintainer_review_required": true,
+  "automatically_promotes_support": false,
+  "app": {
+    "sha256": "d7781cf275a6f4f23547e8e698005d0e8dbb78e205a34baa2eda3ea158fc64d1",
+    "architecture": "x64",
+    "version": "26.9.1.5339"
+  },
+  "image_identity": {
+    "mapped_header_match": true,
+    "identity_scope": "mapped_pe_headers_only",
+    "mapped_code_hash_verified": false,
+    "target_architecture": "x64",
+    "fingerprint_sha256": "4ffc0c44edcdb165b85556811af18df69b1c8f3e90459dbe0a4681c4d5fd1f66"
+  },
+  "source_verification": "PINNED_RELEASE_FILES",
+  "source_hashes": {
+    "kakao_read_win.py": "9a479ae87c82e523476ee46e70b6703530592298dca78908c9f5b63823b44310",
+    "reader_accounts.py": "4f20df38507106c27af51371358089933bc55483f5d7551dd9d19087118db1f0",
+    "reader_config.py": "2bd83981286ab4a9d8b729cf1011b21a9165cfba1bd833441ab36043bf2d1f23",
+    "reader_envelope.py": "872f293b705e1923b88755202b8c7f7073435eb37defecbdbbaa2cd79be1f338",
+    "reader_files.py": "832f4d9c8a53f71472ffd4c9b51ffaf0770fe819fcb9024954d56a7994b345f5",
+    "reader_image.py": "9bfe35482418a9047cf1809f680d749b57c034abcbeb7068e8243fb727053fb3",
+    "reader_job.py": "9ecba014b6865695837b8626e3052b023dd3b581411a44c638d73d3d07a38e53",
+    "reader_queries.py": "8665fef1d8f1e7d9efa71de68e69dd5342c52269661447297f89af4c036ed0e5",
+    "reader_rpc.py": "23e2c0be9c0594d9b36b2c3a068e4de6d8c9e52f32b83193aa46be31506dd5fb",
+    "reader_snapshot.py": "f8395951e947b4af887386d25ac913967bd8d3f0c7f70ac210915be29ed41337",
+    "reader_source.py": "bcdf2e1ef9ebdc4ae8e3f865026a1fc257589db31c69306b1f67efc3d22f41d3",
+    "reader_x86.py": "5ce697237c775781c2f69fe7396fbda9df3ebda1bba09170c8cd075df038f032",
+    "room_reader.py": "17e39adaa8fda22953c4db51aa9e5621f177fb63f0a59945d921368f64a06e26",
+    "v2_key_derivation.py": "01db4ff6290480b4a7319a696b6ef8770fb8c26e002dde681c413a72f714194f",
+    "vendor_appstate.py": "d08f5316e06781eb8fa84506929fa584db79515dc9d1f012b2718a73a0096e87"
+  },
+  "source_manifest_sha256": "6a04249ce5fab0d2b52cfb240cf979fc6157da095885894de204ad5e2b7bfa08",
+  "message_count": 3,
+  "owner_match_ack": false,
+  "owner_match_method": "NOT_RUN",
+  "independent_log_id_comparison": "NOT_RUN",
+  "execution": {
+    "inner": {
+      "exit": 0,
+      "timeout": false,
+      "job_memory_limit": 268435456,
+      "peak_job_commit_bytes": 64401408,
+      "elapsed_sec": 3.473,
+      "source_execution": "verified-source-bytes",
+      "source_manifest_sha256": "6a04249ce5fab0d2b52cfb240cf979fc6157da095885894de204ad5e2b7bfa08"
+    },
+    "outer": {
+      "exit": 0,
+      "timeout": false,
+      "job_memory_limit": 268435456,
+      "peak_job_commit_bytes": 80162816,
+      "elapsed_sec": 4.085,
+      "source_execution": "verified-source-bytes",
+      "source_manifest_sha256": "6a04249ce5fab0d2b52cfb240cf979fc6157da095885894de204ad5e2b7bfa08"
+    }
+  },
+  "snapshots": [
+    {
+      "kind": "room-list",
+      "snapshot_pages": 2710,
+      "authenticated_pages": 2710,
+      "zero_pages": 0,
+      "double_read_verified": true,
+      "quick_check": "ok"
+    },
+    {
+      "kind": "selected-messages",
+      "snapshot_pages": 49,
+      "authenticated_pages": 49,
+      "zero_pages": 0,
+      "double_read_verified": true,
+      "quick_check": "ok"
+    },
+    {
+      "kind": "profiles",
+      "snapshot_pages": 961,
+      "authenticated_pages": 961,
+      "zero_pages": 0,
+      "double_read_verified": true,
+      "quick_check": "ok"
+    },
+    {
+      "kind": "self-author-identity",
+      "snapshot_pages": 1459,
+      "authenticated_pages": 1459,
+      "zero_pages": 0,
+      "double_read_verified": true,
+      "quick_check": "ok"
+    }
+  ],
+  "resource_observations": {
+    "app_private_before": 216006656,
+    "app_private_after": 216006656,
+    "process_read_bytes": 10487502,
+    "elapsed_sec": 2.595
+  },
+  "safety": {
+    "input_calls": 0,
+    "clipboard_calls": 0,
+    "send_calls": 0,
+    "process_dump_saved": false,
+    "key_saved": false,
+    "plaintext_db_saved": false,
+    "server_history_fetched": false
+  },
+  "authentication": {
+    "ikm_wrap": true,
+    "selected_key_wrap": true,
+    "selected_page_hmac": true
+  },
+  "contains_chat_content": false,
+  "contains_account_or_room_identifiers": false
+}

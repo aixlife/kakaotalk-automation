@@ -1,0 +1,95 @@
+# 기존 카카오톡을 유지한 32비트 읽기 검증
+
+26.9.1.5339 **카카오톡 x86 앱은 시험 후보**입니다. 실제 소유자 PC에서 대화를 읽고 원문을 대조하는 검증은 아직 대기 중입니다. 이 문서와 합성 테스트는 실제 읽기 성공을 대신하지 않습니다. 기존 앱을 재설치하거나 64비트 앱으로 바꾸지 않고 검사합니다.
+
+지원 후보의 실행 파일 SHA-256은 다음 하나입니다.
+
+```text
+86f384d1694c74a611181e6c88509e8f59eb8d9739ae3d7789711a9355757500
+```
+
+공식 실행 파일의 PE32·버전·해시는 확인했지만, 보호된 정적 파일에서 내부 함수 경계와 고정 오프셋은 확정하지 못했습니다. 후보 어댑터는 제한된 32비트 구조를 찾고 IKM AES-KW, 선택 DB 키 AES-KW, SQLCipher 페이지 인증을 모두 확인합니다. 실제 검증이 실패하면 추측한 주소·해시·메모리 한도로 통과시키지 않습니다.
+
+## 준비
+
+- Windows 운영체제와 Python은 **64비트**여야 합니다. Python 3.11 이상이며 기존 실물 검증 환경은 3.14 x64입니다.
+- 본인이 이미 로그인한 카카오톡을 그대로 둡니다. 읽을 채팅창을 미리 열 필요는 없습니다.
+- [정식 저장소](https://github.com/aixlife/kakaotalk-automation)의 배포본과 고정 의존성을 사용합니다. 개인 수정본은 덮어쓰지 않습니다.
+- 소유자가 읽기를 허용한 정확한 방 하나를 고릅니다. 도구는 그 방의 최대3건만 반환합니다. 발신·UI 조작·앱 실행·로그인·보안 변경은 없습니다.
+
+저장소 폴더에서 다음처럼 가상환경을 준비합니다. 이미 같은 의존성의 가상환경이 있으면 그것을 사용합니다.
+
+```powershell
+python -m venv .venv
+$python = (Resolve-Path '.venv\Scripts\python.exe').Path
+& $python -m pip install -r requirements-windows.txt
+$cli = (Resolve-Path 'skills\kakaotalk-mac\scripts\windows\kakao_read_win.py').Path
+& $python $cli doctor --candidate-x86
+```
+
+`CANDIDATE_READY`는 앱 파일과 실행 환경이 후보 조건에 맞는다는 뜻입니다. 아직 앱 메모리나 대화 DB를 읽지 않았으며 `read_verification=NOT_RUN`입니다. 다른 해시면 중단하고 도구의 정식 지원 여부를 확인합니다. 해시를 복사해 소스에 넣으면 안 됩니다.
+
+## 한 방에서 읽기 실행
+
+```powershell
+& $python tools/windows_probe.py run --candidate-x86 --name "정확한 방 이름"
+```
+
+`--candidate-x86`는 검토된 32비트 후보를 명시적으로 선택합니다. 32비트·64비트 실행 파일이 함께 남아 있어도 64비트 파일을 우선 선택하지 않습니다. 알려지지 않은 해시를 허용하는 옵션은 아닙니다. 이 옵션을 생략하면 기존의 자동 선택 방식을 사용합니다.
+
+실행 파일과 런타임 소스 해시를 확인한 뒤 x86 후보 또는 검증된 x64 경로를 고릅니다. 기본 조회 범위는 로컬 캐시의 최근87600시간(약10년) 안에서 최신 최대3건입니다. 최근24시간에 대화가 없더라도 실제 검증용 결과를 찾기 위한 범위이며, 다른 방이나 전체 대화를 출력하지 않습니다. 필요한 경우 `--since`, `--until`로 날짜를 지정합니다.
+
+계정 폴더가 여러 개면 자동으로 최근 폴더를 선택하지 않습니다.
+
+```powershell
+& $python $cli accounts
+& $python tools/windows_probe.py run --candidate-x86 --name "정확한 방 이름" --account-token "64자리_계정_토큰"
+```
+
+토큰은 소유자가 확인한 계정의 전체64자리 값을 사용합니다. `accounts`는 익명 토큰·크기·수정일·백업명 힌트만 읽습니다. 대화 내용 없이 계정을 확실히 고를 수 없으면 중단하고 도움을 요청합니다. 백업·계정 폴더를 삭제하지 않습니다.
+
+읽기에 성공하면 `READ_VERIFIED_PENDING_OWNER_MATCH`와 `request_id`가 나옵니다. 빈 결과, 잘린 본문, 시간 초과, 비정상 종료, 인증 실패는 통과시키지 않습니다. 이 단계도 최종 `PASS`가 아닙니다.
+
+## 원문은 본인 PC에서만 대조
+
+앞에서 받은 32자리 `request_id`를 사용합니다. 이 명령은 저장된 결과를 표시하며 카카오톡을 다시 읽지 않습니다.
+
+```powershell
+& $python tools/windows_probe.py review --request-id "32자리_요청_ID" --show-local-review
+```
+
+소유자가 표시된 모든 메시지의 본문과 시각을 실제 카카오톡 원문과 대조합니다. 하나라도 다르거나 확인할 수 없으면 아래 확인 명령을 실행하지 않습니다. AI가 자동으로 대조 완료를 선언하거나, 읽기 성공만으로 `--matched`를 붙이면 안 됩니다.
+
+모든 내용이 맞다고 소유자가 확인한 뒤에만 실행합니다.
+
+```powershell
+& $python tools/windows_probe.py confirm --request-id "32자리_요청_ID" --matched
+```
+
+`confirm`은 저장된 영수증·소스 무결성과 소유자의 확인을 검사하며 앱을 다시 읽지 않습니다. 최종 `PASS`도 **이 PC·설치본·선택 방에 대한 소유자 확인 결과**입니다. 독립적인 메시지 ID 대조나 모든 32비트 앱의 지원을 증명하지 않으며, stable 업데이트 목록에 자동 등록되지 않습니다.
+
+## 공유할 것은 proof 파일 하나
+
+공유 가능한 JSON은 다음 폴더에 있습니다. 출력의 `share_only`가 정확한 파일 이름을 알려줍니다.
+
+```text
+%LOCALAPPDATA%\KakaoReader\proofs
+```
+
+- `probe-…-pending.json`: 읽기 성공, 소유자 대조 대기.
+- `probe-…-confirmed.json`: 소유자 대조까지 확인한 결과.
+- `probe-…-blocked.json`: 중단 사유.
+
+**이 JSON 파일만 전달합니다.** 원문·계정/방 식별자를 포함하지 않습니다. `receipts` 폴더, 전체 터미널 출력, `review` 결과, 대화 캡처, 계정 파일은 전달하지 않습니다. 원문은 기존 `%LOCALAPPDATA%\KakaoReader\receipts`에만 남으므로 자동 동기화·공유 폴더로 옮기지 않습니다.
+
+## 끊김·오류가 생기면
+
+요청 ID가 있다면 같은 저장 결과를 회수합니다. 새 `run`을 반복하지 않습니다.
+
+```powershell
+& $python tools/windows_probe.py resume --request-id "32자리_요청_ID"
+```
+
+`resume`은 앱을 다시 실행하거나 다시 읽지 않습니다. 이미 기록된 결과면 `review`를 사용합니다. `BLOCKED`를 빈 대화나 성공으로 바꾸지 말고, 생성된 proof와 앱 버전·아키텍처·Python 버전·도구 릴리스를 확인합니다. 원문 없는 오류 정보로 다음 검증본을 준비할 수 있습니다.
+
+32비트 후보는 [stable 자동 업데이트](verified-updates.md)에서 제외됩니다. 새로운 앱 해시나 내부 구조를 검증한 정식 코드가 필요하면 유지보수자가 별도로 검증·배포해야 합니다. 카카오톡 재설치, 버전 다운그레이드, 관리자 권한, 해시·RAM·시간 제한 변경으로 강행하지 않습니다.

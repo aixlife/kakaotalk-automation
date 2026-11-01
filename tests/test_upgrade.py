@@ -216,9 +216,11 @@ class UpgradeTests(unittest.TestCase):
 class KnownReleaseTests(unittest.TestCase):
     def test_bundled_release_variants_are_self_consistent(self):
         releases = installer.known_releases()
-        self.assertEqual(set(releases), {'v0.2.0', 'v0.2.0-crlf'})
-        for record in releases.values():
-            self.assertEqual(record['commit'], '5d887e4153f4bff9658246a0a47cae60e1112601')
+        self.assertEqual(set(releases), {'v0.2.0', 'v0.2.0-crlf', 'v0.3.0'})
+        for label, record in releases.items():
+            expected_commit = ('805aafaad0a460279a480b0834eac6847d2dc9f6' if label == 'v0.3.0'
+                               else '5d887e4153f4bff9658246a0a47cae60e1112601')
+            self.assertEqual(record['commit'], expected_commit)
             self.assertEqual(record['manifest_sha256'], installer.manifest_sha(record['manifest']))
 
     def test_exact_git_release_bytes_upgrade_for_lf_and_crlf(self):
@@ -241,7 +243,7 @@ class KnownReleaseTests(unittest.TestCase):
                         if digest is None:
                             path.mkdir(exist_ok=True)
                         else:
-                            body = subprocess.check_output(['git', 'show', 'v0.2.0:skills/kakaotalk-mac/' + name], cwd=ROOT)
+                            body = subprocess.check_output(['git', 'show', record['commit']+':skills/kakaotalk-mac/' + name], cwd=ROOT)
                             if label.endswith('-crlf'):
                                 body = body.replace(b'\n', b'\r\n')
                             self.assertEqual(hashlib.sha256(body).hexdigest(), digest)

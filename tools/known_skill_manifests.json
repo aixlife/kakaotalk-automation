@@ -44,6 +44,28 @@
         "scripts/windows/v2_key_derivation.py": "fb6387a4ecb669c2e0c79e9bc86bc33848b03745d98e7cb4c12873f412ac4292",
         "scripts/windows/vendor_appstate.py": "ae6c4abfc39627b2940e94a6669cebe7a20d0a5dcdf24d3154c640cd0de678fc"
       }
+    },
+    "v0.3.0": {
+      "commit": "805aafaad0a460279a480b0834eac6847d2dc9f6",
+      "manifest_sha256": "ca61597dced07c49b742369181f5a4c48632bc65db2e3c4804b4f9b80b7fb9c2",
+      "manifest": {
+        "LICENSE": "d29cd2011e03665d1bb582127ef1f9e23eff74312d4c3255ef05b0ee50be3a43",
+        "SKILL.md": "98f8c2bec78be85eb853db6b44b717b1e68a044cc778c27519b1e1180051cc74",
+        "references/": null,
+        "references/windows.md": "ba04329a55e29d3e553ebe668196d6fe643c884f01aa410301fc408471313aa0",
+        "scripts/": null,
+        "scripts/windows/": null,
+        "scripts/windows/kakao_read_win.py": "0890e84a6624cf0aa48c45bc989811eec98a8e0579ca69aa5449f0432108bf72",
+        "scripts/windows/reader_config.py": "1889c73bbf5f980dcd1a23c483f86fd69ced5a69309de46c91b2903fc2ebdecc",
+        "scripts/windows/reader_envelope.py": "aed9b8e532b2a1a9afb7d2e76b90228dc87b5619d877e8c1c176e3c1179ceb38",
+        "scripts/windows/reader_job.py": "c4b273cce227a318fe32aa5e12cf605641b536a0edf8e441a24faa227e47e133",
+        "scripts/windows/reader_queries.py": "8665fef1d8f1e7d9efa71de68e69dd5342c52269661447297f89af4c036ed0e5",
+        "scripts/windows/reader_rpc.py": "6c9f75ce38256f067ea268c7657512ac889ffaf6c447330c43b45c992f5c9896",
+        "scripts/windows/requirements.txt": "e6f2d177a7c426341286b633cde6d4cc32169c225da4da4d47a63640ec44d0f9",
+        "scripts/windows/room_reader.py": "9ca72048698aa6311aee947579188dfa75c9b22396906d6cf4da07cd209e7f36",
+        "scripts/windows/v2_key_derivation.py": "f493c22e36fb8489965edc4fb48046c825ccc68bb6ce218fc27dffd7dc334749",
+        "scripts/windows/vendor_appstate.py": "39ce09a25b7950dc0d79cec41cdab65173c0c07c18ac57b4dd7bc8f6c464ca92"
+      }
     }
   }
 }

@@ -10,7 +10,8 @@ if not __debug__:
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_NAMES=frozenset(('reader_config.py','kakao_read_win.py','reader_rpc.py','reader_job.py',
-    'room_reader.py','reader_queries.py','reader_envelope.py','v2_key_derivation.py','vendor_appstate.py'))
+    'room_reader.py','reader_queries.py','reader_envelope.py','v2_key_derivation.py','vendor_appstate.py',
+    'reader_accounts.py','reader_x86.py','reader_snapshot.py','reader_files.py','reader_image.py','reader_source.py'))
 MEMORY_LIMIT=256*1024*1024
 
 def installation_digest(path,maximum_bytes=256*1024*1024):

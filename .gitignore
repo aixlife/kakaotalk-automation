@@ -30,3 +30,11 @@ credentials*
 *-request.json
 *-output.json
 *-search.png
+# Project-local updater packages, journals and preserved skill installations.
+.kakaotalk-reader/
+.kakaotalk-reader.stage-*/
+.kakaotalk-mac-backups/
+# Owner-run proof exports are shared deliberately, never committed by default.
+probe-*-pending.json
+probe-*-confirmed.json
+probe-*-blocked.json
