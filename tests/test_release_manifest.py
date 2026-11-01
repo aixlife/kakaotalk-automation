@@ -30,7 +30,8 @@ def qa_fixture(sources, app, report_sha256, *, method='independent-local-source'
     owner = method == 'owner-visible-text-time'
     source_sha = release.file_manifest_sha(sources)
     job = {'exit': 0, 'timeout': False, 'job_memory_limit': 268435456,
-           'peak_job_commit_bytes': 1048576, 'elapsed_sec': 0.05}
+           'peak_job_commit_bytes': 1048576, 'elapsed_sec': 0.05,
+           'source_execution': 'verified-source-bytes', 'source_manifest_sha256': source_sha}
     probe = {
         'schema': 'windows-kakao-reader-probe/v1',
         'status': 'PASS' if owner else 'READ_VERIFIED_PENDING_OWNER_MATCH',
@@ -79,6 +80,58 @@ def fixture():
 
 
 class ManifestTests(unittest.TestCase):
+    def test_both_jobs_require_the_exact_verified_source_execution_binding(self):
+        for job in ('inner','outer'):
+            for key in ('source_execution','source_manifest_sha256'):
+                for operation in ('missing','none','mismatch'):
+                    with self.subTest(job=job,key=key,operation=operation):
+                        value = fixture()
+                        qa = value['compatible_apps'][0]['qa']
+                        record = qa['probe']['execution'][job]
+                        if operation == 'missing':
+                            del record[key]
+                        else:
+                            record[key] = None if operation == 'none' else ('0'*64 if key.endswith('sha256') else 'bytecode-cache')
+                        rehash_qa(qa)
+                        with self.assertRaises(release.ManifestError):
+                            release.validate_manifest(value)
+
+    def test_actual_probe_producer_output_is_consumed_without_dropping_auth_fields(self):
+        # Invoke only the data-only producer validator on its synthetic receipt.
+        # No runtime import, process, app, DB, or network action is performed.
+        from test_windows_probe import probe, sample
+        value = fixture()
+        sources = value['compatible_apps'][0]['qa']['probe']['source_hashes']
+        record = sample()
+        record['source_hashes'] = dict(sources)
+        record['request']['source_hashes'] = dict(sources)
+        record['request']['source_sha256'] = sources['room_reader.py']
+        for job in ('execution','outer_execution'):
+            record[job]['source_manifest_sha256'] = release.file_manifest_sha(sources)
+        produced = probe.validate_record(record,sources)
+        app = {'architecture':produced['app']['architecture'],
+               'app_sha256':produced['app']['sha256'],'version':produced['app']['version']}
+        app['qa'] = qa_fixture(sources,app,value['report']['sha256'])
+        app['qa']['probe'] = produced
+        rehash_qa(app['qa'])
+        value['compatible_apps'] = [app]
+        parsed = release.validate_manifest(value)
+        self.assertEqual(parsed['compatible_apps'][0]['qa']['probe'],produced)
+        for job in ('inner','outer'):
+            self.assertEqual(len(produced['execution'][job]),7)
+            self.assertEqual(produced['execution'][job]['source_execution'],'verified-source-bytes')
+
+    def test_committed_v04_actual_sanitized_proof_matches_consumer_schema(self):
+        # This archived proof remains bound to its own source map, not whatever
+        # newer runtime happens to be checked out when this regression runs.
+        raw = (ROOT/'docs/qa-windows-v0.4.0-proof.json').read_bytes()
+        proof = json.loads(raw)
+        app = {'architecture':proof['app']['architecture'],
+               'app_sha256':proof['app']['sha256'],'version':proof['app']['version']}
+        release._probe(proof,proof['source_hashes'],app)
+        self.assertEqual(proof['source_manifest_sha256'],release.file_manifest_sha(proof['source_hashes']))
+        self.assertEqual((ROOT/'docs/qa-windows-v0.4.0-proof.json').read_bytes(),raw)
+
     def test_valid_roundtrip_canonical_and_copy_isolation(self):
         value = fixture()
         parsed = release.parse_manifest(release.canonical_bytes(value))

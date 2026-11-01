@@ -113,14 +113,17 @@ def _seconds(value, maximum):
              math.isfinite(value), 'PROBE_RESOURCE_BOUND_FAILED')
 
 
-def _execution(value, maximum):
+def _execution(value, maximum, source_manifest):
     _keys(value, ('exit', 'timeout', 'job_memory_limit', 'peak_job_commit_bytes',
-                  'elapsed_sec'), 'PROBE_EXECUTION')
+                  'elapsed_sec', 'source_execution', 'source_manifest_sha256'), 'PROBE_EXECUTION')
     _integer(value['exit'], 0, 0, 'PROBE_EXECUTION_FAILED')
     _require(value['timeout'] is False, 'PROBE_EXECUTION_FAILED')
     _integer(value['job_memory_limit'], 268435456, 268435456, 'PROBE_RESOURCE_BOUND_FAILED')
     _integer(value['peak_job_commit_bytes'], 1, 268435456, 'PROBE_RESOURCE_BOUND_FAILED')
     _seconds(value['elapsed_sec'], maximum)
+    _require(value['source_execution'] == 'verified-source-bytes' and
+             value['source_manifest_sha256'] == source_manifest,
+             'PROBE_SOURCE_EXECUTION_NOT_VERIFIED')
 
 
 def _probe(probe, runtime, app):
@@ -158,8 +161,9 @@ def _probe(probe, runtime, app):
                  probe['owner_match_ack'] is False and probe['owner_match_method'] == 'NOT_RUN',
                  'PROBE_OWNER_ACK_INVALID')
     _keys(probe['execution'], ('inner', 'outer'), 'PROBE_EXECUTION')
-    _execution(probe['execution']['inner'], 45)
-    _execution(probe['execution']['outer'], 50)
+    source_manifest = file_manifest_sha(runtime)
+    _execution(probe['execution']['inner'], 45, source_manifest)
+    _execution(probe['execution']['outer'], 50, source_manifest)
     snapshots = probe['snapshots']
     _require(type(snapshots) is list and 2 <= len(snapshots) <= 8, 'PROBE_SNAPSHOTS_REQUIRED')
     kinds = set()
