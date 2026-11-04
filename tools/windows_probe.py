@@ -41,7 +41,7 @@ EXPECTED_SOURCE_HASHES = {
     "reader_snapshot.py": "f8395951e947b4af887386d25ac913967bd8d3f0c7f70ac210915be29ed41337",
     "reader_source.py": "bcdf2e1ef9ebdc4ae8e3f865026a1fc257589db31c69306b1f67efc3d22f41d3",
     "reader_x86.py": "5ce697237c775781c2f69fe7396fbda9df3ebda1bba09170c8cd075df038f032",
-    "room_reader.py": "17e39adaa8fda22953c4db51aa9e5621f177fb63f0a59945d921368f64a06e26",
+    "room_reader.py": "5362f24b15ead2f1cd1ecdb1d594968626f61d5889a9b2a7bace68efd524e97f",
     "v2_key_derivation.py": "01db4ff6290480b4a7319a696b6ef8770fb8c26e002dde681c413a72f714194f",
     "vendor_appstate.py": "d08f5316e06781eb8fa84506929fa584db79515dc9d1f012b2718a73a0096e87"
 }

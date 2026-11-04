@@ -49,6 +49,11 @@ X86_CANDIDATES={'86f384d1694c74a611181e6c88509e8f59eb8d9739ae3d7789711a935575750
 def x86_app():
     return Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Kakao'/'KakaoTalk'/'KakaoTalk.exe'
 BASELINE=335675392
+# x86 candidate: the x64 fixed baseline does not describe a 32-bit app, so the
+# same 128 MiB growth allowance is measured from the first observation instead.
+# Directory-identity sweeps are rate-limited during page reads only; every file
+# open/close still runs the full ScopedFiles identity check.
+X86_SCOPE_INTERVAL=0.25
 MAX_READ=384*1024*1024
 LIMIT_SECONDS=40
 PAGE=4096
@@ -127,15 +132,27 @@ class Reader:
         assert self.k.GetProcessTimes(handle,*[C.byref(x) for x in values]),'PROCESS_TIMES_UNAVAILABLE'
         return values[0].dwHighDateTime<<32|values[0].dwLowDateTime
 
+    def scope_guard(self):
+        if not hasattr(self,'files'):return
+        if getattr(self,'target_architecture','x64')=='x86':
+            now=time.monotonic();last=getattr(self,'_scope_checked',None)
+            if last is not None and 0<=now-last<X86_SCOPE_INTERVAL:return
+            self.files.guard();self._scope_checked=time.monotonic();return
+        self.files.guard()
+
     def guard(self):
-        if hasattr(self,'files'):self.files.guard()
+        self.scope_guard()
         assert time.monotonic()-self.started<LIMIT_SECONDS,'TIME_LIMIT'
         assert self.read_bytes<=MAX_READ,'PROCESS_READ_LIMIT'
         alive=W.DWORD()
         assert self.k.GetExitCodeProcess(self.handle,C.byref(alive)) and alive.value==259,'APP_EXITED_RETRY_READ'
         m=PM();m.cb=C.sizeof(m)
         assert self.ps.GetProcessMemoryInfo(self.handle,C.byref(m),m.cb),'APP_MEMORY_QUERY_FAILED'
-        assert m.private<2147483648 and m.private-BASELINE<134217728,'APP_MEMORY_LIMIT'
+        if getattr(self,'target_architecture','x64')=='x86':
+            if getattr(self,'_x86_private_floor',None) is None:self._x86_private_floor=m.private
+            assert m.private<2147483648 and m.private-self._x86_private_floor<134217728,'APP_MEMORY_LIMIT'
+        else:
+            assert m.private<2147483648 and m.private-BASELINE<134217728,'APP_MEMORY_LIMIT'
         own=PM();own.cb=C.sizeof(own)
         assert self.ps.GetProcessMemoryInfo(self.k.GetCurrentProcess(),C.byref(own),own.cb) and own.private<268435456,'OWN_MEMORY_LIMIT'
         return m.private
@@ -288,7 +305,7 @@ class Reader:
         callback=(lambda first:recover(self,path,first)) if self.key_route=='envelope' else self.recover
         kind='room-list' if path.name=='chatListInfo.edb' else 'profiles' if path.name=='TalkUserDB.edb' else 'selected-messages'
         con=open_snapshot(path,recover_key=callback,budget=self.snapshot_budget,kind=kind,
-                          opener=self.files.open,scope_guard=self.files.guard)
+                          opener=self.files.open,scope_guard=self.scope_guard)
         self.snapshots.append(con.receipt)
         return con
 
